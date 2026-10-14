@@ -1,0 +1,33 @@
+name: 功能
+description: 新功能或功能改动
+title: "[功能] "
+labels: ["type:feature"]
+body:
+  - type: input
+    id: req
+    attributes:
+      label: 关联需求
+      description: 需求编号，如 REQ-01；暂无编号写「无」
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 要做什么、为什么做
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 逐条列出，做到什么程度算完成
+      placeholder: |
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 补充说明
+      description: 涉及的契约、设计稿、相关 Issue 等

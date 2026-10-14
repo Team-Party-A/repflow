@@ -1,0 +1,25 @@
+name: 任务
+description: 非功能类工作，如文档、配置、调研、会议准备
+title: "[任务] "
+labels: ["type:task"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 要做什么、为什么做
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 完成标准
+      description: 交付什么、放在哪里
+      placeholder: |
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 补充说明

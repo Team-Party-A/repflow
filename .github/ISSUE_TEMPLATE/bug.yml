@@ -1,0 +1,39 @@
+name: Bug
+description: 报告一个缺陷
+title: "[Bug] "
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 一步一步写，别人照做就能复现
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 报错信息贴原文，可附截图或录屏
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境
+      description: 设备与系统版本、App 版本或提交号、分支
+  - type: input
+    id: req
+    attributes:
+      label: 关联需求
+      description: 需求编号，如 REQ-01

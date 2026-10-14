@@ -1,0 +1,168 @@
+> **草案 v0，待第 1 次组会表决**
+
+# AGENTS.md
+
+本文件是人和 agent 共用的工程规范，也是唯一的规范来源。Codex 直接读取本文件；Claude Code 通过根目录 `CLAUDE.md` 中的 `@AGENTS.md` 加载本文件。不要在 `CLAUDE.md` 里另写规则。
+
+总原则：「做什么」和「接口长什么样」由人决定，agent 只在边界内负责「怎么实现」。谁合并的代码谁负责，每个人都要能解释自己合并进来的每一段代码。
+
+## 1. 项目简介与模块地图
+
+RepFlow 是一个用 Apple Watch 自动计次的健身记录 App：开组前选好动作，组内由手表自动数次数，训练记录同步到 iPhone 和后端。
+
+| 目录 | 模块 | 内容 |
+| --- | --- | --- |
+| `apps/apple/` | watch、ios | Xcode 工程：iOS App 与 watchOS App 两个 target |
+| `backend/` | backend | FastAPI 服务与测试 |
+| `web/` | web | Web 看板（如果做） |
+| `ml/` | ml | 计次与识别算法、录制数据工具、训练脚本 |
+| `deploy/` | deploy | docker compose、nginx 配置、部署脚本 |
+| `docs/` | docs | 正式文档；ADR 放 `docs/adr/`，截图放 `docs/assets/` |
+
+模块目录下可以再放一份模块级 `AGENTS.md`（同时配一个只有 `@AGENTS.md` 的 `CLAUDE.md`），只写该模块特有的规则。
+
+## 2. 技术栈与命令
+
+> 第 8 周前不写业务代码，下表的命令在各模块搭好工程后由模块负责人填写确认。标「待定」的项目不得由 agent 自行决定。
+
+| 模块 | 技术栈 | 构建 | 测试 | 格式化 / lint |
+| --- | --- | --- | --- | --- |
+| watch、ios | SwiftUI（iOS + watchOS） | `xcodebuild build`（scheme 待定） | `xcodebuild test`（XCTest、XCUITest） | SwiftFormat 或 SwiftLint（二选一，待定） |
+| backend | FastAPI + PostgreSQL | 待定 | `pytest --cov` | `ruff format`、`ruff check` |
+| ml | Python | — | `pytest` | `ruff format`、`ruff check` |
+| web | 待定 | 待定 | Cypress | ESLint + Prettier |
+| deploy | docker compose + nginx | `docker compose build` | 健康检查（待定） | — |
+
+## 3. 编码规范
+
+### 3.1 命名
+
+- Swift：类型用 `UpperCamelCase`，变量和函数用 `lowerCamelCase`；Python：函数和变量用 `snake_case`，类用 `PascalCase`，常量用 `UPPER_SNAKE_CASE`。
+- 名字说清用途，不用缩写和单字母（循环下标除外）。
+- 术语与 `docs/` 中的术语表一致（「组」「次」「动作」「训练」）。
+
+```swift
+struct WorkoutSet {
+    let exercise: Exercise
+    var repCount: Int
+}
+```
+
+```python
+MAX_REPS_PER_SET = 100
+
+def count_reps(samples: list[AccelSample]) -> int: ...
+```
+
+### 3.2 错误处理
+
+- 只在真会失败的边界处理错误：网络、IO、解析、外部输入。内部纯函数不包。
+- 错误信息要具体，包含关键变量；不吞异常，不写空的 `catch` / `except`。
+
+```swift
+do {
+    try await api.upload(session)
+} catch {
+    logger.error("upload session failed: id=\(session.id), error=\(error)")
+    throw SyncError.uploadFailed(sessionID: session.id)
+}
+```
+
+```python
+from fastapi import HTTPException
+
+session = db.get(WorkoutSession, session_id)
+if session is None:
+    raise HTTPException(status_code=404, detail=f"session {session_id} not found")
+```
+
+### 3.3 日志
+
+- 不用 `print`。Swift 用 `os.Logger`，Python 用标准库 `logging`。
+- 生产环境不输出 debug 级日志；日志里不出现密钥、token、密码。
+
+```swift
+import os
+private let logger = Logger(subsystem: "repflow", category: "sync")
+logger.info("sync finished: uploaded=\(count)")
+```
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+logger.info("sync finished: uploaded=%d", count)
+```
+
+### 3.4 注释
+
+- 注释解释「为什么」和不明显的决策，不复述代码在做什么。
+- 不留注释掉的代码和死代码。
+
+```python
+# 手表加速度计在 50 Hz 下抖动明显，先做 5 点滑动平均再找峰值
+smoothed = moving_average(samples, window=5)
+```
+
+## 4. 分支与提交规范
+
+与 [CONTRIBUTING.md](CONTRIBUTING.md) 一致，摘要如下：
+
+- 从 `dev` 拉出 `feature/<模块>-<简述>` 或 `bugfix/<简述>`，完成后经 PR 合回 `dev`。
+- 提交信息：`<type>(<scope>): <subject>`，例如 `feat(watch): add peak-based rep counter`。
+  - type：`feat`、`fix`、`refactor`、`docs`、`style`、`test`、`perf`、`ci`、`chore`
+  - scope：`watch`、`ios`、`backend`、`web`、`ml`、`deploy`、`docs`
+- 一个提交只做一件事；一个 PR 只对应一个 Issue，diff 尽量不超过 400 行。
+
+## 5. 接口契约
+
+以下文件是各模块之间的契约，**agent 不得擅自修改**。改契约必须走 PR，并经所有受影响模块的负责人批准。
+
+| 契约 | 位置 | 状态 |
+| --- | --- | --- |
+| 后端 API | `docs/api/openapi.yaml` | 第 8 周前写好并冻结 |
+| 传感器录制数据格式 | `docs/data/01-sensor-recording-format.md` | 第 8 周冻结 |
+
+客户端按契约实现；后端还没完成时，客户端先连 mock server。
+
+## 6. 禁止事项
+
+- 不改其他模块的代码。
+- 不提交密钥、`.env`、签名证书；只提交 `.env.example`。
+- 不擅自新增依赖；确需新增，停下来写进 PR 的「待决问题」，由人决定。
+- 不删除、不跳过已有测试。
+- 不推送到 `dev` 和 `main`。
+- 不做大规模重构、不删除文件，除非人已在 Issue 或对话中明确确认。
+- 不索取、不使用生产服务器的 SSH 权限和服务器上的 `.env`。
+
+## 7. 实现原则
+
+1. **选最简单的可行实现。** Issue 没要求的，不引入抽象层，也不新增依赖。
+2. **遇到以下情况，停下来，写进 PR 描述的「待决问题」，不自行拍板：**
+   - 需要改接口契约
+   - 需要新增依赖
+   - 需要改目录结构或 CI 配置
+   - 需求有歧义
+3. **只在 Issue 下写进度评论。** 不改看板状态，不新建 Issue，不关闭 Issue。
+
+## 8. 单个任务的工作流
+
+1. 人在 Issue 里写清目标和验收标准（这一步不交给 AI）。
+2. 从 `dev` 拉出 feature 分支。
+3. agent 根据 Issue 和相关文件实现，同时写单元测试。
+4. 作者逐段读懂代码，在本地跑通测试和格式化；看不懂的地方让 agent 解释。
+5. 按规范提交，开 PR，填写模板（包括 AI 参与说明）。
+6. 另一名成员审查，批准由人点。
+7. CI 通过后合入，Issue 自动关闭。
+
+## 9. 交付前必须跑通的检查
+
+交付任务（提交或开 PR）前，在改动涉及的模块里跑通以下检查，并把结果写进 PR 的「怎么测的及结果」：
+
+| 模块 | 检查命令 |
+| --- | --- |
+| backend、ml | `ruff format --check . && ruff check . && pytest` |
+| watch、ios | SwiftFormat / SwiftLint 检查（待定） + `xcodebuild test`（scheme 与 destination 待定） |
+| web | ESLint + Prettier 检查 + 构建（命令待定） |
+| deploy | `docker compose config` |
+
+任何一项失败都不能交付；不能为了通过检查而删除或跳过测试。
