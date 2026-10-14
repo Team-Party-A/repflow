@@ -1,4 +1,4 @@
-name: 功能
+name: 功能需求
 description: 新功能或功能改动
 title: "[功能] "
 labels: ["type:feature"]

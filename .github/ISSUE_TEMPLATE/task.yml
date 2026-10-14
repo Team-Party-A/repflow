@@ -1,4 +1,4 @@
-name: 任务
+name: 一般任务
 description: 非功能类工作，如文档、配置、调研、会议准备
 title: "[任务] "
 labels: ["type:task"]
