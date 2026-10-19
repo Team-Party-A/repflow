@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>Apple Watch 一组流程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.n{font-family:'Barlow Condensed','SF Pro Display',sans-serif;font-weight:800;font-variant-numeric:tabular-nums;line-height:.9;letter-spacing:-0.01em}
+.scr{width:297px;height:363px;box-sizing:border-box;border-radius:54px;background:#000;padding:26px 20px 20px;display:flex;flex-direction:column;color:#F2F1EA;box-shadow:0 0 0 10px #1C1C1E,0 0 0 11px #3A3B3E}
+.cap{width:297px;display:flex;flex-direction:column;gap:6px;color:#121212}
+.cap b{font-size:16px}
+.cap span{font-size:13px;line-height:1.55;color:#5E5D57}
+.btn{height:60px;border:0;border-radius:999px;font:600 21px 'PingFang SC',-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;width:100%}
+</style>
+</head>
+<body>
+<div style="width: 1780px; height: 580px; box-sizing: border-box; padding: 48px 58px; background: #E9E8E1; font-family: 'PingFang SC', -apple-system, 'Hiragino Sans GB', sans-serif; display: flex; gap: 48px">
+
+  <div style="display: flex; flex-direction: column; gap: 34px">
+    <div class="scr" style="gap: 8px">
+      <div style="font-size: 20px; font-weight: 600; margin-bottom: 4px">选择动作</div>
+      <div style="height: 56px; box-sizing: border-box; border-radius: 18px; background: #1A1B1D; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: inset 0 0 0 2px #D4FF3A">
+        <span style="font-size: 20px">哑铃弯举</span>
+        <div style="width: 26px; height: 26px; border-radius: 13px; background: #D4FF3A; color: #0B0B0C; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      </div>
+      <div style="height: 56px; box-sizing: border-box; border-radius: 18px; background: #1A1B1D; padding: 0 16px; display: flex; align-items: center">
+        <span style="font-size: 20px">哑铃肩推</span>
+      </div>
+      <div style="height: 56px; box-sizing: border-box; border-radius: 18px; background: #1A1B1D; padding: 0 16px; display: flex; align-items: center; justify-content: space-between">
+        <span style="font-size: 20px; color: #9D9C94">深蹲</span>
+        <span style="font-size: 14px; color: #9D9C94">仅手动</span>
+      </div>
+      <div style="flex-grow: 1"></div>
+      <button class="btn" style="background: #D4FF3A; color: #0B0B0C"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5v14l11-7z"/></svg>开始本组</button>
+    </div>
+    <div class="cap"><b>① 选择动作</b><span>选中项 = Volt 描边 + 勾号。不支持自动计次的动作灰显并写明「仅手动」，不藏起来。</span></div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 34px">
+    <div class="scr">
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <span style="font-size: 20px; font-weight: 600">哑铃弯举</span>
+        <span style="font-size: 18px; color: #9D9C94">第 2 组</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px">
+        <div style="width: 9px; height: 9px; border-radius: 5px; background: #D4FF3A"></div>
+        <span style="font-size: 16px; color: #9D9C94">估计次数 · 00:42</span>
+      </div>
+      <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 6px">
+        <div class="n" style="font-size: 172px; color: #D4FF3A">9</div>
+        <div style="font-size: 22px; color: #9D9C94; align-self: flex-end; padding-bottom: 26px">次</div>
+      </div>
+      <button class="btn" style="background: #2A2B2E; color: #F2F1EA"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>结束本组</button>
+    </div>
+    <div class="cap"><b>② 计次中</b><span>Volt 数字 = 机器的实时估计，占满屏宽。「结束本组」是正常操作，用中性灰，不用红。</span></div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 34px">
+    <div class="scr">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <span style="font-size: 20px; font-weight: 600">请核对次数</span>
+        <span style="display: flex; align-items: center; gap: 4px; font-size: 15px; font-weight: 600; color: #FFB547"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>待核对</span>
+      </div>
+      <div style="flex-grow: 1; display: flex; align-items: center; justify-content: space-between">
+        <button aria-label="减少 1 次" style="width: 56px; height: 56px; border: 0; border-radius: 28px; background: #2A2B2E; color: #F2F1EA; display: flex; align-items: center; justify-content: center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+          <div class="n" style="font-size: 132px; color: #F2F1EA">10</div>
+          <div style="font-size: 15px; color: #9D9C94">估计 9 · 已修正</div>
+        </div>
+        <button aria-label="增加 1 次" style="width: 56px; height: 56px; border: 0; border-radius: 28px; background: #2A2B2E; color: #F2F1EA; display: flex; align-items: center; justify-content: center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+      <button class="btn" style="background: #D4FF3A; color: #0B0B0C"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>确认并保存</button>
+      <button style="height: 40px; margin-top: 4px; border: 0; background: transparent; color: #FF6B5B; font: 600 17px 'PingFang SC', -apple-system, sans-serif">放弃本组</button>
+    </div>
+    <div class="cap"><b>③ 核对</b><span>数字从 Volt 变白 = 交给人确认。表冠或 ± 修正，下方保留「估计 9」以便算法评估。</span></div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 34px">
+    <div class="scr" style="align-items: center">
+      <div style="margin-top: 6px; width: 64px; height: 64px; border-radius: 32px; box-sizing: border-box; border: 3px solid #F2F1EA; display: flex; align-items: center; justify-content: center"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#F2F1EA" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <div style="font-size: 22px; font-weight: 600; margin-top: 12px">已保存到手表</div>
+      <div style="font-size: 16px; color: #9D9C94; margin-top: 4px">哑铃弯举 · 第 2 组 · 10 次</div>
+      <div style="display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 6px 12px; border-radius: 999px; background: #2A2B2E; color: #FFB547; font-size: 15px; font-weight: 600"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>待传到手机</div>
+      <div style="flex-grow: 1"></div>
+      <button class="btn" style="background: #D4FF3A; color: #0B0B0C"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5v14l11-7z"/></svg>开始第 3 组</button>
+      <button style="height: 36px; margin-top: 2px; border: 0; background: transparent; color: #9D9C94; font: 600 17px 'PingFang SC', -apple-system, sans-serif">结束训练</button>
+    </div>
+    <div class="cap"><b>④ 已保存</b><span>先说存在哪（手表），再说下一站（待传到手机），绝不提前写「已同步」。下一组是唯一主操作。</span></div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 34px">
+    <div class="scr">
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <span style="font-size: 20px; font-weight: 600">哑铃弯举</span>
+        <span style="font-size: 18px; color: #9D9C94">第 3 组</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; color: #FFB547"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5"/><path d="M12 17.5v.01"/></svg><span style="font-size: 19px; font-weight: 600">计次可能不准</span></div>
+      <div style="font-size: 15px; line-height: 1.5; color: #9D9C94; margin-top: 4px">传感器数据中断，结束后请核对</div>
+      <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 6px">
+        <div class="n" style="font-size: 120px; color: #9D9C94">7</div>
+        <div style="font-size: 20px; color: #9D9C94; align-self: flex-end; padding-bottom: 18px">次?</div>
+      </div>
+      <button class="btn" style="background: #2A2B2E; color: #F2F1EA"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>结束本组</button>
+    </div>
+    <div class="cap"><b>⑤ 计次异常</b><span>数字褪成灰色、加问号，Volt 让位给琥珀警示。不伪装正常计次（REQ-ALG-003）。</span></div>
+  </div>
+
+</div>
+</body>
+</html>
