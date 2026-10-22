@@ -204,7 +204,7 @@ h2 { font-size: 20px; font-weight: 700; margin: 0; }
       <dl>
         <dt>REQ-IOS-001 注册与登录</dt><dd>错误密码 → 提示；用 demo 注册 → 用户名已被使用；新用户名注册直接进入；「杀掉并重新打开」不用再登录。</dd>
         <dt>REQ-IOS-002 退出与登录失效</dt><dd>设置 → 退出登录，有待上传时提示条数；重新登录 demo 记录都在并继续上传；换账号只看到自己的记录。「让登录失效」后改一条记录 → 横幅「重新登录」。</dd>
-        <dt>REQ-IOS-003 接收手表的训练</dt><dd>「手表发来一组」→ 今天出现训练，来源「自动计次」；「重复发送上一组」不新增；断网照常保存；未登录时不保存。</dd>
+        <dt>REQ-IOS-003 接收手表的训练</dt><dd>「手表发来一组」→ 今天出现训练，来源「自动计次」；「重复发送上一组」不新增；断网照常保存；未登录时不保存，登录后补发。</dd>
         <dt>REQ-IOS-004 手动添加</dt><dd>今天 → 手动记录一次训练；次数填 0、-1、2.5 → 提示；重量可空，填负数提示。</dd>
         <dt>REQ-IOS-005 训练详情</dt><dd>点任一训练：时间、总组数、动作总次数、同步状态，组按动作分开列。</dd>
         <dt>REQ-IOS-006 修改</dt><dd>详情点铅笔改次数、重量或动作；添加一组、删除一组；摘要与统计随之变化，状态回到待同步。</dd>
@@ -275,7 +275,7 @@ function initState() {
     accounts: { demo: { password: '123456', workouts: seedDemo(), deletes: 0 } },
     user: null, tokenValid: true, online: true, failNext: false, authBanner: false,
     route: 'login', prevTab: 'today', detailId: null, range: 7, theme: 'light', splash: false,
-    loginName: '', watch: null, log: [], ctx: null
+    loginName: '', watch: null, watchQueue: [], watchSent: 0, lastWatchSet: null, log: [], ctx: null
   };
 }
 const acc = () => S.accounts[S.user];
@@ -559,8 +559,44 @@ function signIn(name) {
   S.authBanner = false;
   S.loginName = '';
   log(`登录：${name}`);
+  // 重新登录是恢复入口：本账号上次失败的记录重新排队，不碰其他账号
+  const failed = acc().workouts.filter(w => w.sync === 'failed');
+  failed.forEach(w => { w.sync = 'pending'; });
+  if (failed.length) log(`重新排队 ${failed.length} 条上传失败的记录`);
   go('today');
+  deliverWatch();
   scheduleSync(600);
+}
+// 手机确认收到前，组一直留在手表的待传队列里；登录后补发
+function deliverWatch() {
+  if (!S.watchQueue.length) return;
+  if (!S.user) return log(`手机未登录：不保存、不回确认，手表上待补发 ${S.watchQueue.length} 组`);
+  const queued = S.watchQueue;
+  S.watchQueue = [];
+  queued.forEach(receiveWatchSet);
+  render();
+}
+function receiveWatchSet(set) {
+  // 按组身份去重：重复送达只回确认，不新增
+  if (Object.values(S.accounts).some(a => a.workouts.some(w => w.sets.some(x => x.id === set.id))))
+    return log(`重复收到同一组（${set.id}）：本地已有，只回确认，不新增`);
+  // 手表消息不带账号：新训练归当前账号，已有训练归原账号（D-31）
+  let owner = S.watch && S.accounts[S.watch.owner];
+  let w = owner && owner.workouts.find(x => x.id === S.watch.wid);
+  if (!w) {
+    w = { id: 'w' + ++seq.w, start: now(), end: now(), sync: 'pending', ver: 0, uploading: false, sets: [] };
+    acc().workouts.push(w);
+    S.watch = { owner: S.user, wid: w.id };
+  }
+  w.sets.push({ ...set });
+  w.end = now();
+  w.ver++;
+  w.sync = 'pending';
+  log(`手机收到 ${set.ex} ${set.reps} 次 → 已保存到手机${S.watch.owner === S.user ? '' : `（归原账号 ${S.watch.owner}）`}`);
+  if (S.watch.owner === S.user) {
+    toast(`收到手表的一组：${set.ex} ${set.reps} 次`);
+    scheduleSync();
+  }
 }
 
 const A = {
@@ -700,35 +736,18 @@ const A = {
 // 演示控制：模拟手表、网络、后端和系统事件
 const PA = {
   watch() {
-    if (!S.user) return log('手表发来一组：手机未登录，不保存、不回确认，这一组留在手表上');
-    // 手表消息不带账号：新训练归当前账号，已有训练归原账号（D-31）
-    let owner = S.watch && S.accounts[S.watch.owner];
-    let w = owner && owner.workouts.find(x => x.id === S.watch.wid);
-    if (!w) {
-      w = { id: 'w' + ++seq.w, start: now(), end: now(), sync: 'pending', ver: 0, uploading: false, sets: [] };
-      acc().workouts.push(w);
-      S.watch = { owner: S.user, wid: w.id };
-      owner = acc();
-    }
-    const ex = ['哑铃弯举', '哑铃肩推', '卧推'][Math.floor(w.sets.length / 2) % 3];
+    const ex = ['哑铃弯举', '哑铃肩推', '卧推'][Math.floor(S.watchSent++ / 2) % 3];
     const reps = 8 + Math.floor(Math.random() * 5);
     const set = { id: 's' + ++seq.s, ex, reps, weight: null, est: reps, src: 'auto' };
-    w.sets.push(set);
-    w.end = now();
-    S.watch.lastSet = set.id;
-    log(`手表发来一组：${ex} ${reps} 次 → 已保存到手机${S.watch.owner === S.user ? '' : `（归原账号 ${S.watch.owner}）`}`);
-    w.ver++;
-    w.sync = 'pending';
-    if (S.watch.owner === S.user) {
-      toast(`收到手表的一组：${ex} ${reps} 次`);
-      scheduleSync();
-    }
-    render();
+    S.watchQueue.push(set);
+    S.lastWatchSet = set;
+    log(`手表发出一组（${set.id}）：${ex} ${reps} 次`);
+    deliverWatch();
   },
   dup() {
-    if (!S.watch || !S.watch.lastSet) return log('还没有手表发来的组');
+    if (!S.lastWatchSet) return log('还没有手表发来的组');
     if (!S.user) return log('重复发送：手机未登录，不处理');
-    log(`重复收到同一组（${S.watch.lastSet}）：本地已有，只回确认，不新增`);
+    receiveWatchSet(S.lastWatchSet);
   },
   net() {
     S.online = !S.online;
