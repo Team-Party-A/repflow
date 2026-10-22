@@ -18,7 +18,7 @@ v0.2 相对 v0.1：视觉层（颜色、字体、按钮、图标的视觉规则�
 
 - Must 流程：选择动作 → 开始本组 → 自动计次 → 结束本组 → 核对／修正 → 确认并本地保存 → 后续同步。
 - 组间休息自动识别、训练模板是 Should，自动识别动作是 Could。UI 不暗示这些能力已完成，也不展示心率、热量、恢复评分等没有承诺的内容。
-- 兼容基线沿用 REQ-NFR-001：iOS 17.2.1、watchOS 9.6.3。本稿用到的 API 都在基线内（见 3.1）。
+- 兼容基线沿用 REQ-NFR-001：iOS 17.2.1、watchOS 10（第 2 次例会由 9.6.3 上调）。本稿用到的 API 都在基线内（见 3.1）。
 - iPhone 跟随系统浅色／深色；Watch 只做深色。
 
 原型稿见 [ui-main.html](../assets/ui-main.html)、[ui-watch.html](../assets/ui-watch.html)、[ui-phone-today.html](../assets/ui-phone-today.html)、[ui-phone-detail.html](../assets/ui-phone-detail.html)、[ui-phone-history.html](../assets/ui-phone-history.html)，用浏览器直接打开；截图见第 6 节。
