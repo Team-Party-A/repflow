@@ -1,0 +1,4 @@
+title = "RepFlow secret scanning"
+
+[extend]
+useDefault = true

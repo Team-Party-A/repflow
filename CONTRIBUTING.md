@@ -84,3 +84,36 @@
 - `.env` 不入库，只提交 `.env.example`；CI 里的密钥放 GitHub Secrets；签名证书不入库。
 - 录制的传感器数据和模型权重体积大，不直接提交，用 Git LFS 或网盘存放。
 - 一旦有密钥被提交，立即更换该密钥，并通知组长。
+
+### 本地提交检查
+
+每次克隆仓库后，在仓库根目录执行一次：
+
+```sh
+sh scripts/install-git-hooks.sh
+```
+
+脚本下载固定版本 gitleaks 8.30.1，核对官方 SHA-256 后，把工具与 Git 原生
+`pre-commit` 钩子装到当前仓库的 Git 私有目录。支持 macOS/Linux 的 ARM64/x64，
+Windows 可在 WSL 执行；需要 Git、curl、tar 和 SHA-256 校验工具，无需 Go、Docker
+或 pre-commit。重复安装可更新本项目钩子；已有其他钩子或自定义 `core.hooksPath`
+时会停止，不覆盖。每个成员安装成功后在 #31 回复确认。
+
+提交时检查暂存区，发现疑似密钥或工具执行失败就阻止提交，日志中的值会脱敏。
+请移除真实密钥、改用环境变量后重新暂存。遇到误报，请先请审查人确认，再单独
+评审最小范围的规则调整，不直接跳过检查，不整目录排除，不把 `.env` 加进白名单。
+
+手动检查当前分支的完整提交历史（包括后来已删除的内容）：
+
+```sh
+common_dir=$(git rev-parse --git-common-dir)
+"$common_dir/repflow-tools/gitleaks/8.30.1/gitleaks" git \
+  --config .gitleaks.toml --redact=100 --verbose \
+  --log-opts="--full-history -m HEAD" .
+```
+
+每个 PR 及 `dev`/`main` 的推送运行相同 CLI 历史扫描；本地钩子不能代替 CI。
+可执行 `sh scripts/test-git-hooks.sh` 在临时仓库中验证正常提交、暂存区拦截、
+脱敏、缺少工具/配置错误、已有钩子保护，以及中间提交和合并提交的历史检测。
+Secret scanning 和 Push protection 由管理员在 GitHub 设置中启用并在 #31 确认。
+假密钥验证使用独立测试 PR，不合入 `dev`/`main`，在正式 PR 附脱敏日志与运行链接。
