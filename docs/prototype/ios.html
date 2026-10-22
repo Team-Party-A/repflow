@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RepFlow iOS 原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; background: #DEDDD6; font-family: 'PingFang SC', -apple-system, 'Hiragino Sans GB', sans-serif; color: #121212; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.stage { display: flex; gap: 40px; justify-content: center; align-items: flex-start; padding: 40px 20px; flex-wrap: wrap; }
+body.shot { background: transparent; }
+body.shot .stage { padding: 14px; justify-content: flex-start; }
+body.shot .panel { display: none; }
+
+/* ---------- 手机外壳与主题 token（取值见 docs/design/UI规范.md 第 2 节） ---------- */
+.phone { position: relative; flex: none; width: 390px; height: 844px; border-radius: 52px; overflow: hidden;
+  background: var(--ground); color: var(--text); box-shadow: 0 0 0 10px #161616, 0 0 0 11px #3A3A3A, 0 24px 60px rgba(0,0,0,.25); }
+.phone[data-theme=light] { --ground:#F4F3EE; --surface:#FFFFFF; --raised:#ECEBE4; --text:#121212; --text2:#5E5D57;
+  --amber:#8A5300; --amber-bg:#FFF1D6; --red:#B8261A; --red-bg:#FDE5E2; --line:#E2E1DA; --tab:#FBFAF6;
+  --p-bg:#121212; --p-fg:#D4FF3A; --dash:#B9B8B0; --bar:#C9C8C0; --bar0:#ECEBE4; --bar-now:#121212; --alert:#F7F6F1; --ink:#121212; }
+.phone[data-theme=dark] { --ground:#0B0B0C; --surface:#1A1B1D; --raised:#2A2B2E; --text:#F2F1EA; --text2:#9D9C94;
+  --amber:#FFB547; --amber-bg:rgba(255,181,71,.13); --red:#FF6B5B; --red-bg:rgba(255,107,91,.13); --line:#2A2B2E; --tab:#141416;
+  --p-bg:#D4FF3A; --p-fg:#121212; --dash:#4A4B4F; --bar:#4A4B4F; --bar0:#2A2B2E; --bar-now:#D4FF3A; --alert:#232427; --ink:#1A1B1D; }
+.statusbar { position: absolute; top: 0; left: 0; right: 0; height: 50px; z-index: 3; display: flex; justify-content: space-between;
+  align-items: center; padding: 8px 34px 0; font: 600 16px -apple-system, sans-serif; background: var(--ground); }
+.statusbar .net { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.screen { position: absolute; top: 50px; bottom: 0; left: 0; right: 0; overflow-y: auto; padding: 8px 20px 120px; scrollbar-width: none; }
+.screen::-webkit-scrollbar { display: none; }
+.screen.bare { padding-bottom: 40px; }
+.tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 84px; padding: 8px 32px 0; z-index: 2; background: var(--tab);
+  border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, 1fr); }
+.tabbar[hidden] { display: none; }
+.tabbar button { border: 0; background: none; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: var(--text2); }
+.tabbar button.on { color: var(--text); font-weight: 600; }
+
+/* ---------- 通用元素 ---------- */
+.n { font-family: 'Barlow Condensed', 'SF Pro Display', sans-serif; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.col { display: flex; flex-direction: column; gap: 16px; }
+.date { font-size: 13px; font-weight: 600; color: var(--text2); }
+h1 { font-size: 34px; font-weight: 700; margin: 2px 0 0; }
+h2 { font-size: 20px; font-weight: 700; margin: 0; }
+.muted { color: var(--text2); }
+.sec { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }
+.sec button { border: 0; background: none; color: var(--text2); font-size: 15px; padding: 0; }
+.list { display: flex; flex-direction: column; gap: 8px; }
+.row { display: flex; align-items: center; gap: 12px; padding: 14px 14px 14px 16px; background: var(--surface); border-radius: 18px; cursor: pointer; }
+.grow { flex-grow: 1; min-width: 0; }
+.rt { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rm { font-size: 13px; color: var(--text2); margin-top: 3px; }
+.rm.red { color: var(--red); }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.chip.amber { background: var(--amber-bg); color: var(--amber); }
+.chip.red { background: var(--red-bg); color: var(--red); }
+.chip.neutral { background: var(--raised); color: var(--text2); }
+.pill { height: 36px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--raised); display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 600; flex: none; }
+.dashed { height: 50px; border: 1.5px dashed var(--dash); border-radius: 18px; background: transparent; font-size: 16px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; }
+.btn { width: 100%; height: 52px; border: 0; border-radius: 999px; font-size: 17px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.btn.primary { background: var(--p-bg); color: var(--p-fg); }
+.btn.primary:disabled { opacity: .4; cursor: default; }
+.btn.secondary { background: var(--raised); color: var(--text); height: 46px; font-size: 16px; }
+.btn.text { background: none; height: 46px; font-size: 16px; color: var(--text2); }
+.btn.text.danger { color: var(--red); }
+.banner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 16px; }
+.banner.amber { background: var(--amber-bg); color: var(--amber); }
+.banner.red { background: var(--red-bg); color: var(--red); }
+.banner.neutral { background: var(--raised); color: var(--text2); }
+.banner .bt { font-size: 15px; font-weight: 600; }
+.banner .bs { font-size: 13px; margin-top: 2px; }
+.banner .pill { background: var(--surface); color: var(--text); }
+.empty { padding: 32px 16px; border-radius: 18px; background: var(--surface); text-align: center; color: var(--text2); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.empty .et { font-size: 17px; font-weight: 600; color: var(--text); }
+.empty .es { font-size: 13px; }
+
+/* ---------- 统计卡 ---------- */
+.stats { border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.stats.ink { background: var(--ink); color: #F2F1EA; --bar:#4A4B4F; --bar0:#2A2B2E; --bar-now:#D4FF3A; --text2:#9D9C94; }
+.stats.plain { background: var(--surface); border-radius: 22px; padding: 16px 18px 12px; gap: 12px; }
+.trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.trio .cap { font-size: 13px; color: var(--text2); margin-top: 4px; }
+.bars { display: grid; gap: 8px; align-items: end; }
+.bars .b { display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: flex-end; height: 100%; }
+.bars .b i { display: block; width: 100%; border-radius: 6px; background: var(--bar); }
+.bars .b i.zero { height: 4px !important; border-radius: 2px; background: var(--bar0); }
+.bars .b i.now { background: var(--bar-now); }
+.bars .b span { font-size: 15px; color: var(--text2); }
+.bars .b span.now { color: var(--bar-now); }
+.axis { display: grid; gap: 8px; font-size: 12px; color: var(--text2); text-align: center; }
+.axis .now { color: var(--text); font-weight: 600; }
+.stats.ink .axis .now { color: #F2F1EA; }
+.seg { display: grid; padding: 3px; border-radius: 12px; background: var(--raised); }
+.seg button { height: 34px; border: 0; border-radius: 9px; background: transparent; font-size: 14px; }
+.seg button.on { background: var(--text); color: var(--ground); font-weight: 600; }
+.dayh { font-size: 13px; font-weight: 600; color: var(--text2); margin: 4px 0 -2px 4px; }
+
+/* ---------- 详情 ---------- */
+.back { display: inline-flex; align-items: center; gap: 2px; height: 44px; margin-left: -8px; border: 0; background: none; font-size: 17px; padding: 0 8px 0 0; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tiles > div { background: var(--surface); border-radius: 16px; padding: 12px 14px; }
+.tiles .cap { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.group { background: var(--surface); border-radius: 18px; }
+.set { display: grid; grid-template-columns: 28px 76px minmax(0, 1fr) 44px; align-items: center; gap: 10px; padding: 10px 8px 10px 16px; }
+.set + .set { background: linear-gradient(var(--raised), var(--raised)) 54px 0 / calc(100% - 54px) 1px no-repeat; }
+.idx { width: 28px; height: 28px; border-radius: 14px; background: var(--raised); font-size: 13px; font-weight: 600; color: var(--text2); display: flex; align-items: center; justify-content: center; }
+.reps { display: flex; align-items: baseline; gap: 4px; }
+.reps span:last-child { font-size: 15px; color: var(--text2); }
+.src { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.icon-btn { width: 44px; height: 44px; border: 0; border-radius: 22px; background: transparent; color: var(--text2); display: flex; align-items: center; justify-content: center; }
+
+/* ---------- 登录 ---------- */
+.auth { min-height: 100%; display: flex; flex-direction: column; gap: 14px; padding-top: 70px; }
+.brand { font-size: 44px; font-weight: 800; letter-spacing: -.5px; }
+.brand b { color: var(--p-bg); }
+.phone[data-theme=dark] .brand b { color: #D4FF3A; }
+.lab { font-size: 13px; font-weight: 600; color: var(--text2); margin: 4px 0 -6px 4px; }
+.field { background: var(--surface); border-radius: 14px; display: flex; align-items: center; }
+.field input, .field select { width: 100%; height: 50px; border: 0; background: none; padding: 0 16px; font-size: 17px; outline: none; appearance: none; }
+.field .unit { padding-right: 16px; color: var(--text2); }
+.err { min-height: 20px; font-size: 14px; color: var(--red); margin: -4px 0 -4px 4px; }
+.switch { border: 0; background: none; color: var(--text2); font-size: 15px; margin-top: auto; padding: 16px 0 24px; }
+.switch b { color: var(--text); }
+.splash { position: absolute; inset: 0; z-index: 6; background: #000; display: flex; align-items: center; justify-content: center; color: #F2F1EA; font-size: 40px; font-weight: 800; }
+.splash b { color: #D4FF3A; }
+
+/* ---------- 设置 ---------- */
+.card { background: var(--surface); border-radius: 18px; }
+.kv { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; font-size: 16px; }
+.kv + .kv { border-top: 1px solid var(--raised); }
+.kv span:last-child { color: var(--text2); }
+.avatar { width: 52px; height: 52px; border-radius: 26px; background: var(--ink); color: #D4FF3A; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; flex: none; }
+.note { font-size: 13px; color: var(--text2); padding: 0 4px; line-height: 1.5; }
+
+/* ---------- 弹层 ---------- */
+.overlay { position: absolute; inset: 0; z-index: 4; background: rgba(0,0,0,.38); display: none; }
+.overlay.on { display: block; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 88%; overflow-y: auto; background: var(--ground); border-radius: 22px 22px 0 0;
+  padding: 8px 20px 34px; display: flex; flex-direction: column; gap: 14px; animation: up .22s ease-out; }
+@keyframes up { from { transform: translateY(40%); opacity: .4; } }
+.sheet-head { display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; height: 48px; }
+.sheet-head .t { text-align: center; font-size: 17px; font-weight: 600; }
+.sheet-head button { border: 0; background: none; font-size: 17px; color: var(--text2); text-align: left; padding: 0; }
+.stepper { display: grid; grid-template-columns: 56px 1fr 56px; align-items: center; gap: 12px; }
+.stepper button { width: 56px; height: 56px; border-radius: 28px; border: 0; background: var(--raised); display: flex; align-items: center; justify-content: center; }
+.stepper input { width: 100%; height: 72px; border: 0; border-radius: 16px; background: var(--surface); text-align: center; font-size: 56px; outline: none; }
+.hint { font-size: 13px; color: var(--text2); text-align: center; margin-top: -6px; }
+.alert { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 280px; background: var(--alert); border-radius: 16px; text-align: center; overflow: hidden; }
+.alert .at { font-size: 17px; font-weight: 600; padding: 20px 16px 0; }
+.alert .am { font-size: 13px; padding: 6px 16px 18px; color: var(--text2); line-height: 1.45; }
+.alert .ab { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border-top: 1px solid var(--line); }
+.alert .ab button { height: 46px; border: 0; background: none; font-size: 17px; }
+.alert .ab button + button { border-left: 1px solid var(--line); }
+.alert .ab .danger { color: var(--red); font-weight: 600; }
+.toast { position: absolute; left: 50%; bottom: 104px; z-index: 5; transform: translateX(-50%); max-width: 330px; padding: 10px 16px; border-radius: 999px;
+  background: rgba(18,18,18,.92); color: #F2F1EA; font-size: 14px; white-space: nowrap; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.on { opacity: 1; }
+
+/* ---------- 演示控制面板（不属于 App） ---------- */
+.panel { width: 360px; background: #FAFAF7; border-radius: 20px; padding: 20px; font-size: 14px; line-height: 1.5; box-shadow: 0 8px 30px rgba(0,0,0,.08); }
+.panel h3 { margin: 0 0 4px; font-size: 17px; }
+.panel .lead { margin: 0 0 12px; color: #5E5D57; font-size: 13px; }
+.panel code { background: #ECEBE4; border-radius: 4px; padding: 0 4px; }
+.panel .gt { font-size: 12px; font-weight: 700; color: #8A8980; margin: 14px 0 6px; letter-spacing: .5px; }
+.panel .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.panel button { border: 1px solid #D7D6CF; background: #FFFFFF; border-radius: 10px; padding: 6px 10px; font-size: 13px; }
+.panel button:hover { border-color: #121212; }
+.panel button.on { background: #121212; color: #D4FF3A; border-color: #121212; }
+.panel #p-state { font-size: 13px; color: #3B3A36; }
+.panel ol { margin: 0; padding-left: 18px; font-size: 12px; color: #3B3A36; max-height: 150px; overflow-y: auto; }
+.panel details { margin-top: 14px; font-size: 12.5px; }
+.panel summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.panel dl { margin: 8px 0 0; }
+.panel dt { font-weight: 600; margin-top: 6px; }
+.panel dd { margin: 0; color: #5E5D57; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="phone" id="phone" data-theme="light">
+    <div class="statusbar"><span id="clock"></span><span class="net" id="net"></span></div>
+    <div class="screen" id="screen"></div>
+    <nav class="tabbar" id="tabbar"></nav>
+    <div class="overlay" id="overlay"></div>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <aside class="panel" id="panel">
+    <h3>演示控制</h3>
+    <p class="lead">这里的按钮模拟手表、网络和后端，不属于 App 界面。演示账号 <code>demo</code> / <code>123456</code>，数据只在本页内存里，刷新即重置。</p>
+    <div id="p-state"></div>
+    <div class="gt">手表</div>
+    <div class="btns"><button data-p="watch">手表发来一组</button><button data-p="dup">重复发送上一组</button></div>
+    <div class="gt">网络与后端</div>
+    <div class="btns"><button data-p="net" id="p-net">断开网络</button><button data-p="fail" id="p-fail">下一次上传失败</button><button data-p="expire">让登录失效</button></div>
+    <div class="gt">App</div>
+    <div class="btns"><button data-p="relaunch">杀掉并重新打开</button><button data-p="theme" id="p-theme">切换深色</button><button data-p="reset">重置演示数据</button></div>
+    <div class="gt">事件</div>
+    <ol id="p-log"></ol>
+    <details open>
+      <summary>Must 用户故事走查</summary>
+      <dl>
+        <dt>REQ-IOS-001 注册与登录</dt><dd>错误密码 → 提示；用 demo 注册 → 用户名已被使用；新用户名注册直接进入；「杀掉并重新打开」不用再登录。</dd>
+        <dt>REQ-IOS-002 退出与登录失效</dt><dd>设置 → 退出登录，有待上传时提示条数；重新登录 demo 记录都在并继续上传；换账号只看到自己的记录。「让登录失效」后改一条记录 → 横幅「重新登录」。</dd>
+        <dt>REQ-IOS-003 接收手表的训练</dt><dd>「手表发来一组」→ 今天出现训练，来源「自动计次」；「重复发送上一组」不新增；断网照常保存；未登录时不保存。</dd>
+        <dt>REQ-IOS-004 手动添加</dt><dd>今天 → 手动记录一次训练；次数填 0、-1、2.5 → 提示；重量可空，填负数提示。</dd>
+        <dt>REQ-IOS-005 训练详情</dt><dd>点任一训练：时间、总组数、动作总次数、同步状态，组按动作分开列。</dd>
+        <dt>REQ-IOS-006 修改</dt><dd>详情点铅笔改次数、重量或动作；添加一组、删除一组；摘要与统计随之变化，状态回到待同步。</dd>
+        <dt>REQ-IOS-007 删除</dt><dd>详情 → 删除训练 → 确认弹窗；取消不变，确认后从历史和统计中移除。</dd>
+        <dt>REQ-IOS-008 历史列表</dt><dd>历史页按开始时间倒序、按天分组；新账号显示空状态；断网照常显示。</dd>
+        <dt>REQ-IOS-009 基础统计</dt><dd>今天页近 7 天统计卡；历史页近 7 天 / 近 30 天 / 全部。</dd>
+        <dt>REQ-IOS-011 同步状态</dt><dd>待同步 / 已同步 / 同步失败三态；「下一次上传失败」后改一条 → 同步失败 → 重试。</dd>
+      </dl>
+    </details>
+  </aside>
+</div>
+
+<script>
+const EXERCISES = ['哑铃弯举', '哑铃肩推', '深蹲', '卧推', '引体向上', '硬拉', '俯卧撑'];
+const WD = '日一二三四五六';
+const DAY = 864e5;
+const $ = s => document.querySelector(s);
+const now = () => new Date();
+const P = {
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  warn: '<path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5"/><path d="M12 17.5v.01"/>',
+  retry: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
+  pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  today: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+  gear: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+  wifi: '<path d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0"/><path d="M12 19.5v.01"/>',
+  off: '<path d="M3 3l18 18"/><path d="M9 16a5 5 0 0 1 6 0M12 19.5v.01M5.5 12.5a10 10 0 0 1 4-2.2M2 9a15 15 0 0 1 5-3.2M14.5 10.3a10 10 0 0 1 4 2.2M22 9a15 15 0 0 0-10-4"/>',
+  play: '<path d="M7 4.5v15l12-7.5z"/>'
+};
+const ic = (name, size = 18, width = 2.4) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`;
+
+// ---------- 数据 ----------
+let seq, S, syncTimer, toastTimer;
+
+function at(daysAgo, h, m) {
+  const d = now();
+  d.setDate(d.getDate() - daysAgo);
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+// set 元组：[动作, 最终次数, 重量, 估计次数（手动为 null）]
+function workout(start, minutes, sync, sets) {
+  return {
+    id: 'w' + ++seq.w, start, end: new Date(start.getTime() + minutes * 60e3), sync, ver: 0, uploading: false,
+    sets: sets.map(([ex, reps, weight, est]) => ({ id: 's' + ++seq.s, ex, reps, weight, est, src: est == null ? 'manual' : 'auto' }))
+  };
+}
+function seedDemo() {
+  return [
+    workout(new Date(now().getTime() - 100 * 60e3), 42, 'pending', [['哑铃弯举', 8, 10, 8], ['哑铃弯举', 10, 10, 9], ['哑铃肩推', 12, null, null]]),
+    workout(at(1, 19, 5), 51, 'synced', [['深蹲', 10, 60, 10], ['深蹲', 10, 60, 10], ['深蹲', 8, 60, 8], ['卧推', 12, 40, 12], ['卧推', 12, 40, 11]]),
+    workout(at(3, 20, 10), 35, 'failed', [['引体向上', 8, null, 8], ['引体向上', 8, null, 8], ['引体向上', 8, null, 7], ['引体向上', 8, null, 8]]),
+    workout(at(5, 18, 40), 38, 'synced', [['硬拉', 6, 80, 6], ['硬拉', 6, 80, 6], ['俯卧撑', 15, null, 15]]),
+    workout(at(12, 19, 20), 45, 'synced', [['卧推', 10, 40, 10], ['卧推', 10, 40, 10], ['哑铃肩推', 10, 12, 10]]),
+    workout(at(21, 20, 0), 30, 'synced', [['深蹲', 12, 50, 12], ['深蹲', 12, 50, 12]])
+  ];
+}
+function initState() {
+  seq = { w: 0, s: 0 };
+  S = {
+    accounts: { demo: { password: '123456', workouts: seedDemo(), deletes: 0 } },
+    user: null, tokenValid: true, online: true, failNext: false, authBanner: false,
+    route: 'login', prevTab: 'today', detailId: null, range: 7, theme: 'light', splash: false,
+    loginName: '', watch: null, log: [], ctx: null
+  };
+}
+const acc = () => S.accounts[S.user];
+const sorted = ws => [...ws].sort((a, b) => b.start - a.start);
+const findWorkout = id => acc().workouts.find(w => w.id === id);
+const totalReps = w => w.sets.reduce((n, s) => n + s.reps, 0);
+const exNames = w => [...new Set(w.sets.map(s => s.ex))];
+const pendingCount = a => a.workouts.filter(w => w.sync !== 'synced').length + a.deletes;
+
+// ---------- 时间格式（UI 规范 3.3） ----------
+const pad = n => String(n).padStart(2, '0');
+const hm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const md = d => `${d.getMonth() + 1}月${d.getDate()}日`;
+const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+const daysAgo = d => Math.round((startOfDay(now()) - startOfDay(d)) / DAY);
+const dayLabel = d => ['今天', '昨天'][daysAgo(d)] || md(d);
+const dayHeader = d => ['今天', '昨天'][daysAgo(d)] || `${md(d)} 周${WD[d.getDay()]}`;
+
+// ---------- 同步模拟 ----------
+function log(text) {
+  S.log.unshift(`${hm(now())}:${pad(now().getSeconds())} ${text}`);
+  S.log.length = Math.min(S.log.length, 30);
+}
+function touch(w) {
+  w.ver++;
+  w.sync = 'pending';
+  scheduleSync();
+}
+function scheduleSync(delay = 900) {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(runSync, delay);
+}
+function runSync() {
+  if (!S.user || !S.online) return;
+  const a = acc();
+  const batch = a.workouts.filter(w => w.sync === 'pending' && !w.uploading);
+  if (!batch.length && !a.deletes) return;
+  // 登录失效只在发起上传时才会被发现（REQ-IOS-002.5）
+  if (!S.tokenValid) {
+    S.authBanner = true;
+    log('上传被拒：登录已失效，记录仍待同步');
+    return render();
+  }
+  const fail = S.failNext;
+  S.failNext = false;
+  const deletes = a.deletes;
+  // 记下上传时的版本，上传期间又被修改的训练不能标成已同步
+  const sent = batch.map(w => [w, w.ver]);
+  batch.forEach(w => { w.uploading = true; });
+  render();
+  setTimeout(() => {
+    sent.forEach(([w, ver]) => {
+      w.uploading = false;
+      if (w.ver === ver) w.sync = fail ? 'failed' : 'synced';
+    });
+    if (!fail) a.deletes = 0;
+    const parts = [batch.length && `${batch.length} 条训练`, deletes && `${deletes} 条删除`].filter(Boolean).join('、');
+    log(fail ? `上传失败：${parts}，本地记录已保留` : `上传成功：${parts}`);
+    if (sent.some(([w, ver]) => w.ver !== ver)) scheduleSync();
+    render();
+  }, 1200);
+}
+
+// ---------- 小组件 ----------
+function chip(w) {
+  if (w.uploading) return `<span class="chip amber">${ic('clock', 14, 2.6)}正在上传</span>`;
+  return {
+    pending: `<span class="chip amber">${ic('clock', 14, 2.6)}待同步</span>`,
+    synced: `<span class="chip neutral">${ic('check', 14, 2.8)}已同步</span>`,
+    failed: `<span class="chip red">${ic('warn', 14, 2.6)}同步失败</span>`
+  }[w.sync];
+}
+function row(w, withDay) {
+  const meta = `${withDay ? dayLabel(w.start) + ' ' : ''}${hm(w.start)} · ${exNames(w).length} 个动作 · ${w.sets.length} 组`;
+  const failed = w.sync === 'failed' && !w.uploading;
+  return `<div class="row" data-a="open" data-id="${w.id}">
+    <div class="grow"><div class="rt">${exNames(w).join(' · ')}</div><div class="rm">${meta}</div>
+    ${failed ? '<div class="rm red">同步失败 · 本地记录已保留</div>' : ''}</div>
+    ${failed ? `<button class="pill" data-a="retry" data-id="${w.id}">${ic('retry', 15)}重试</button>` : chip(w)}</div>`;
+}
+function stats(ws, days) {
+  const from = days ? startOfDay(now()) - (days - 1) * DAY : -Infinity;
+  const sel = ws.filter(w => w.start.getTime() >= from);
+  return { sel, n: sel.length, sets: sel.reduce((n, w) => n + w.sets.length, 0), reps: sel.reduce((n, w) => n + totalReps(w), 0) };
+}
+function trio(st, numSize, highlight) {
+  const cell = (v, cap, hl) => `<div><div class="n" style="font-size:${numSize}px${hl ? ';color:#D4FF3A' : ''}">${v}</div><div class="cap">${cap}</div></div>`;
+  return `<div class="trio">${cell(st.n, '次训练')}${cell(st.sets, '组')}${cell(st.reps, '动作总次数', highlight)}</div>`;
+}
+function barChart(ws, days, showValues, height) {
+  const totals = Array.from({ length: days }, (_, i) => {
+    const day = startOfDay(now()) - (days - 1 - i) * DAY;
+    return ws.filter(w => startOfDay(w.start) === day).reduce((n, w) => n + totalReps(w), 0);
+  });
+  const max = Math.max(1, ...totals);
+  const gap = days > 7 ? 3 : 8;
+  const bars = totals.map((v, i) => {
+    const isNow = i === days - 1;
+    const label = showValues && v && days <= 7 ? `<span class="n ${isNow ? 'now' : ''}">${v}</span>` : '';
+    return `<div class="b">${label}<i class="${v ? '' : 'zero'} ${isNow ? 'now' : ''}" style="height:${Math.round(v / max * (height - (showValues ? 20 : 0)))}px"></i></div>`;
+  }).join('');
+  const axis = days <= 7
+    ? totals.map((_, i) => i === days - 1 ? '<span class="now">今天</span>' : `<span>${WD[new Date(startOfDay(now()) - (days - 1 - i) * DAY).getDay()]}</span>`).join('')
+    : `<span style="text-align:left">${md(new Date(startOfDay(now()) - (days - 1) * DAY))}</span><span style="text-align:right" class="now">今天</span>`;
+  const cols = days <= 7 ? `repeat(${days}, 1fr)` : '1fr 1fr';
+  return `<div class="bars" style="grid-template-columns:repeat(${days},1fr);gap:${gap}px;height:${height}px">${bars}</div>
+    <div class="axis" style="grid-template-columns:${cols};gap:${gap}px;margin-top:-8px">${axis}</div>`;
+}
+function emptyState() {
+  return `<div class="empty">${ic('list', 30, 1.8)}<div class="et">还没有训练记录</div><div class="es">戴上手表开始一组，或者手动记录一次训练</div></div>`;
+}
+function banners() {
+  let html = '';
+  if (S.authBanner) html += `<div class="banner red">${ic('warn', 20)}<div class="grow"><div class="bt">登录已失效</div><div class="bs">请重新登录后继续同步，本地记录不受影响</div></div><button class="pill" data-a="relogin">重新登录</button></div>`;
+  if (!S.online) html += `<div class="banner neutral">${ic('off', 20, 2.2)}<div class="grow"><div class="bt">手机未联网</div><div class="bs">记录照常保存在手机，联网后自动上传</div></div></div>`;
+  return html;
+}
+
+// ---------- 页面 ----------
+function vLogin(register) {
+  return `<div class="auth">
+    <div class="brand">Rep<b>Flow</b></div>
+    <div class="muted" style="margin:-8px 0 18px">${register ? '创建账号，训练记录会归到这个账号' : '用手表自动计次的训练记录'}</div>
+    <div class="lab">用户名</div><div class="field"><input id="f-user" autocomplete="off" value="${S.loginName}" placeholder="用户名"></div>
+    <div class="lab">密码</div><div class="field"><input id="f-pass" type="password" placeholder="密码"></div>
+    <div class="err" id="f-err"></div>
+    <button class="btn primary" data-a="${register ? 'register' : 'login'}">${register ? '注册并登录' : '登录'}</button>
+    <button class="switch" data-a="go" data-r="${register ? 'login' : 'register'}">${register ? '已有账号？<b>登录</b>' : '没有账号？<b>注册</b>'}</button>
+  </div>`;
+}
+function vToday() {
+  const ws = sorted(acc().workouts);
+  const d = now();
+  return `<div class="col">
+    <div><div class="date">${md(d)} 周${WD[d.getDay()]}</div><h1>今天</h1></div>
+    ${banners()}
+    <div class="stats ink"><div class="cap" style="font-size:13px;color:#9D9C94">近 7 天</div>${trio(stats(ws, 7), 44, true)}${barChart(ws, 7, false, 56)}</div>
+    <div class="sec"><h2>最近训练</h2>${ws.length > 3 ? '<button data-a="tab" data-t="history">全部</button>' : ''}</div>
+    ${ws.length ? `<div class="list">${ws.slice(0, 3).map(w => row(w, true)).join('')}</div>` : emptyState()}
+    <button class="dashed" data-a="newWorkout">${ic('plus')}手动记录一次训练</button>
+  </div>`;
+}
+function vHistory() {
+  const ws = sorted(acc().workouts);
+  const st = stats(ws, S.range);
+  const seg = [[7, '近 7 天'], [30, '近 30 天'], [0, '全部']]
+    .map(([r, label]) => `<button class="${S.range === r ? 'on' : ''}" data-a="range" data-r="${r}">${label}</button>`).join('');
+  let list = '', lastDay = '';
+  for (const w of st.sel) {
+    const h = dayHeader(w.start);
+    if (h !== lastDay) { list += `<div class="dayh">${h}</div>`; lastDay = h; }
+    list += row(w, false);
+  }
+  return `<div class="col" style="gap:10px">
+    <h1>历史</h1>
+    ${banners()}
+    <div class="seg" style="grid-template-columns:repeat(3,1fr)">${seg}</div>
+    <div class="stats plain">${trio(st, 34)}
+      ${S.range ? `<div class="cap muted" style="font-size:13px;border-top:1px solid var(--raised);padding-top:12px">每日动作总次数</div>${barChart(ws, S.range, true, 76)}` : ''}</div>
+    ${!ws.length ? emptyState() : st.sel.length ? list : '<div class="empty"><div class="es">这段时间没有训练</div></div>'}
+  </div>`;
+}
+function vSettings() {
+  const a = acc();
+  const n = pendingCount(a);
+  return `<div class="col">
+    <h1>设置</h1>
+    ${banners()}
+    <div class="card" style="display:flex;align-items:center;gap:14px;padding:16px">
+      <div class="avatar">${S.user[0].toUpperCase()}</div>
+      <div class="grow"><div style="font-size:18px;font-weight:600">${S.user}</div><div class="muted" style="font-size:13px;margin-top:2px">已登录 · 本机 ${a.workouts.length} 次训练</div></div>
+    </div>
+    <div class="lab" style="margin-bottom:-10px">同步</div>
+    <div class="card">
+      <div class="kv"><span>待上传</span><span>${n ? n + ' 条' : '无'}</span></div>
+      <div class="kv"><span>手机网络</span><span>${S.online ? '已联网' : '未联网'}</span></div>
+    </div>
+    ${n && S.online ? `<button class="btn secondary" data-a="syncNow">${ic('retry', 18)}立即上传</button>` : ''}
+    <div class="lab" style="margin-bottom:-10px">关于</div>
+    <div class="card"><div class="kv"><span>版本</span><span>原型 v0.1</span></div></div>
+    <div class="note">训练记录按账号分开保存在本机。退出登录不会删除记录，再次登录同一账号后，未上传的记录会继续上传。</div>
+    <button class="btn text danger" data-a="askLogout">退出登录</button>
+  </div>`;
+}
+function srcLabel(s) {
+  if (s.src === 'manual') return '手动';
+  return s.reps === s.est ? '自动计次' : `自动计次（已修正）<br>估计 ${s.est} 次`;
+}
+function vDetail() {
+  const w = findWorkout(S.detailId);
+  const groups = exNames(w).map(ex => {
+    const sets = w.sets.filter(s => s.ex === ex);
+    return `<h2 style="margin-top:6px">${ex}</h2><div class="group">${sets.map((s, i) => `<div class="set">
+      <div class="idx">${i + 1}</div>
+      <div class="reps"><span class="n" style="font-size:40px">${s.reps}</span><span>次</span></div>
+      <div><div style="font-size:16px" class="${s.weight == null ? 'muted' : ''}">${s.weight == null ? '重量未填写' : s.weight + ' kg'}</div><div class="src">${srcLabel(s)}</div></div>
+      <button class="icon-btn" data-a="editSet" data-sid="${s.id}" aria-label="修正${ex}第 ${i + 1} 组">${ic('pencil', 20, 2.2)}</button></div>`).join('')}</div>`;
+  }).join('');
+  const mins = Math.round((w.end - w.start) / 60e3);
+  const time = w.end && mins > 0 ? `${hm(w.start)} – ${hm(w.end)} · ${mins} 分钟` : `${hm(w.start)} · 手动记录`;
+  let banner;
+  if (w.uploading) banner = `<div class="banner amber">${ic('clock', 20)}<div class="grow"><div class="bt">正在上传</div><div class="bs">上传完成前可以继续查看和修改</div></div></div>`;
+  else banner = {
+    pending: `<div class="banner amber">${ic('clock', 20)}<div class="grow"><div class="bt">已保存到手机 · 待同步</div><div class="bs">联网后自动上传，可以继续查看和修改</div></div></div>`,
+    failed: `<div class="banner red">${ic('warn', 20)}<div class="grow"><div class="bt">同步失败 · 本地记录已保留</div><div class="bs">网络恢复后会自动重试</div></div><button class="pill" data-a="retry" data-id="${w.id}">${ic('retry', 15)}重试</button></div>`,
+    synced: `<div class="banner neutral">${ic('check', 20, 2.6)}<div class="grow"><div class="bt">已同步</div><div class="bs">后端已保存这次训练的当前版本</div></div></div>`
+  }[w.sync];
+  return `<div class="col" style="gap:14px">
+    <button class="back" data-a="back">${ic('back', 22)}${S.prevTab === 'history' ? '历史' : '今天'}</button>
+    <div style="margin-top:-8px"><div style="font-size:28px;font-weight:700">${md(w.start)} 训练</div><div class="muted" style="font-size:15px;margin-top:4px">${time}</div></div>
+    ${S.authBanner ? banners() : ''}${banner}
+    <div class="tiles">
+      <div><div class="n" style="font-size:34px">${exNames(w).length}</div><div class="cap">个动作</div></div>
+      <div><div class="n" style="font-size:34px">${w.sets.length}</div><div class="cap">组</div></div>
+      <div><div class="n" style="font-size:34px">${totalReps(w)}</div><div class="cap">动作总次数</div></div>
+    </div>
+    ${groups}
+    <button class="btn secondary" data-a="addSet" style="margin-top:4px">${ic('plus')}添加一组</button>
+    <button class="btn text danger" data-a="askDelWorkout">${ic('trash')}删除训练</button>
+  </div>`;
+}
+
+// ---------- 弹层 ----------
+function openSheet(html) {
+  $('#overlay').innerHTML = `<div class="sheet" role="dialog">${html}</div>`;
+  $('#overlay').classList.add('on');
+}
+function openAlert(title, message, buttons) {
+  $('#overlay').innerHTML = `<div class="alert" role="alertdialog"><div class="at">${title}</div><div class="am">${message}</div>
+    <div class="ab">${buttons.map(([label, action, cls]) => `<button class="${cls || ''}" data-a="${action}">${label}</button>`).join('')}</div></div>`;
+  $('#overlay').classList.add('on');
+}
+function closeOverlay() {
+  $('#overlay').classList.remove('on');
+  $('#overlay').innerHTML = '';
+}
+function setForm({ title, ex, reps, weight, est, action, label, extra = '' }) {
+  return `<div class="sheet-head"><button data-a="close">取消</button><div class="t">${title}</div><span></span></div>
+    <div class="lab">动作</div><div class="field"><select id="f-ex">${EXERCISES.map(e => `<option ${e === ex ? 'selected' : ''}>${e}</option>`).join('')}</select><span class="unit">›</span></div>
+    <div class="lab">次数</div>
+    <div class="stepper"><button data-a="step" data-d="-1" aria-label="减少 1 次">${ic('minus', 22)}</button>
+      <input id="f-reps" class="n" inputmode="numeric" value="${reps}" aria-label="次数"><button data-a="step" data-d="1" aria-label="增加 1 次">${ic('plus', 22)}</button></div>
+    ${est != null ? `<div class="hint">手表估计 ${est} 次 · 修正后来源仍是「自动计次」</div>` : ''}
+    <div class="lab">重量（可不填）</div><div class="field"><input id="f-w" inputmode="decimal" placeholder="未填写" value="${weight ?? ''}"><span class="unit">kg</span></div>
+    <div class="err" id="f-err"></div>
+    <button class="btn primary" data-a="${action}">${ic('check')}${label}</button>${extra}`;
+}
+// 输入规则：REQ-IOS-004.2、004.3；文案：UI 规范 7.2
+function readSetForm() {
+  const ex = $('#f-ex').value;
+  const reps = $('#f-reps').value.trim();
+  const weightText = $('#f-w').value.trim();
+  const fail = msg => { $('#f-err').textContent = msg; return null; };
+  if (!/^\d+$/.test(reps) || +reps === 0) return fail('请输入有效的整数次数');
+  let weight = null;
+  if (weightText !== '') {
+    weight = Number(weightText);
+    if (Number.isNaN(weight)) return fail('请输入有效的重量');
+    if (weight < 0) return fail('重量不能小于 0');
+  }
+  return { ex, reps: +reps, weight };
+}
+
+// ---------- 交互 ----------
+function go(route) {
+  S.route = route;
+  if (['today', 'history', 'settings'].includes(route)) S.prevTab = route;
+  render();
+  $('#screen').scrollTop = 0;
+}
+function toast(text) {
+  const el = $('#toast');
+  el.textContent = text;
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 1800);
+}
+function signIn(name) {
+  S.user = name;
+  S.tokenValid = true;
+  S.authBanner = false;
+  S.loginName = '';
+  log(`登录：${name}`);
+  go('today');
+  scheduleSync(600);
+}
+
+const A = {
+  go: d => go(d.r),
+  tab: d => go(d.t),
+  login() {
+    const name = $('#f-user').value.trim(), pass = $('#f-pass').value;
+    if (!name || !pass) return void ($('#f-err').textContent = '请填写用户名和密码');
+    const a = S.accounts[name];
+    if (!a || a.password !== pass) return void ($('#f-err').textContent = '用户名或密码错误');
+    signIn(name);
+  },
+  register() {
+    const name = $('#f-user').value.trim(), pass = $('#f-pass').value;
+    if (!name || !pass) return void ($('#f-err').textContent = '请填写用户名和密码');
+    if (S.accounts[name]) return void ($('#f-err').textContent = '用户名已被使用');
+    S.accounts[name] = { password: pass, workouts: [], deletes: 0 };
+    log(`注册：${name}`);
+    signIn(name);
+  },
+  open(d) { S.detailId = d.id; go('detail'); },
+  back: () => go(S.prevTab),
+  range(d) { S.range = +d.r; render(); },
+  retry(d) {
+    const w = findWorkout(d.id);
+    w.sync = 'pending';
+    log('手动重试上传');
+    render();
+    runSync();
+  },
+  syncNow() {
+    acc().workouts.forEach(w => { if (w.sync === 'failed') w.sync = 'pending'; });
+    render();
+    runSync();
+  },
+  relogin() {
+    S.loginName = S.user;
+    S.user = null;
+    log('登录失效，回到登录页；本地记录保留');
+    go('login');
+  },
+  newWorkout() {
+    openSheet(setForm({ title: '手动记录训练', ex: EXERCISES[0], reps: '', weight: null, est: null, action: 'saveNew', label: '保存训练' }));
+  },
+  saveNew() {
+    const v = readSetForm();
+    if (!v) return;
+    const w = { id: 'w' + ++seq.w, start: now(), end: null, sync: 'pending', ver: 0, uploading: false,
+      sets: [{ id: 's' + ++seq.s, ...v, est: null, src: 'manual' }] };
+    acc().workouts.push(w);
+    closeOverlay();
+    log(`手动记录：${v.ex} ${v.reps} 次`);
+    S.detailId = w.id;
+    go('detail');
+    toast('已保存到手机');
+    touch(w);
+  },
+  addSet() {
+    const w = findWorkout(S.detailId);
+    openSheet(setForm({ title: '添加一组', ex: w.sets.at(-1).ex, reps: '', weight: w.sets.at(-1).weight, est: null, action: 'saveAdd', label: '保存' }));
+  },
+  saveAdd() {
+    const v = readSetForm();
+    if (!v) return;
+    const w = findWorkout(S.detailId);
+    w.sets.push({ id: 's' + ++seq.s, ...v, est: null, src: 'manual' });
+    closeOverlay();
+    touch(w);
+    render();
+    toast('已添加一组');
+  },
+  editSet(d) {
+    const w = findWorkout(S.detailId);
+    const s = w.sets.find(x => x.id === d.sid);
+    const index = w.sets.filter(x => x.ex === s.ex).indexOf(s) + 1;
+    S.ctx = { sid: s.id };
+    openSheet(setForm({ title: `修正第 ${index} 组`, ex: s.ex, reps: s.reps, weight: s.weight, est: s.src === 'auto' ? s.est : null,
+      action: 'saveEdit', label: '保存', extra: `<button class="btn text danger" data-a="askDelSet">${ic('trash')}删除这一组</button>` }));
+  },
+  step(d) {
+    const input = $('#f-reps');
+    input.value = Math.max(0, (parseInt(input.value, 10) || 0) + +d.d);
+  },
+  saveEdit() {
+    const v = readSetForm();
+    if (!v) return;
+    const w = findWorkout(S.detailId);
+    Object.assign(w.sets.find(x => x.id === S.ctx.sid), v);
+    closeOverlay();
+    touch(w);
+    render();
+    toast('已保存，等待同步');
+  },
+  askDelSet() {
+    const w = findWorkout(S.detailId);
+    // 一组都不剩的训练不保留（D-30），删最后一组等于删整次训练
+    if (w.sets.length === 1) return openAlert('删除最后一组？', '这次训练只剩这一组，删除后整次训练会从历史和统计中移除，删除结果会同步到后端。', [['取消', 'close'], ['删除训练', 'delWorkout', 'danger']]);
+    openAlert('删除这一组？', '本次训练的总组数和动作总次数会随之更新，其他组不变。', [['取消', 'close'], ['删除', 'delSet', 'danger']]);
+  },
+  delSet() {
+    const w = findWorkout(S.detailId);
+    w.sets = w.sets.filter(x => x.id !== S.ctx.sid);
+    closeOverlay();
+    touch(w);
+    render();
+    toast('已删除一组');
+  },
+  askDelWorkout() {
+    openAlert('删除这次训练？', '它将从历史和统计中移除，删除结果会同步到后端。', [['取消', 'close'], ['删除训练', 'delWorkout', 'danger']]);
+  },
+  delWorkout() {
+    const a = acc();
+    const w = findWorkout(S.detailId);
+    a.workouts = a.workouts.filter(x => x !== w);
+    // 从没上传过的训练删了就删了，不需要通知后端
+    if (w.sync === 'synced' || w.ver > 0) { a.deletes++; scheduleSync(); }
+    closeOverlay();
+    log(`删除训练：${md(w.start)} ${exNames(w).join('、')}`);
+    go(S.prevTab);
+    toast('已删除训练');
+  },
+  askLogout() {
+    const n = pendingCount(acc());
+    if (n) openAlert(`还有 ${n} 条记录未上传，仍要退出登录吗？`, `记录会保留在本机，重新登录 ${S.user} 后继续上传。`, [['取消', 'close'], ['退出登录', 'logout', 'danger']]);
+    else openAlert('退出登录？', '本机记录会保留，重新登录后可以继续查看。', [['取消', 'close'], ['退出登录', 'logout', 'danger']]);
+  },
+  logout() {
+    closeOverlay();
+    log(`退出登录：${S.user}（本机记录保留）`);
+    S.user = null;
+    S.authBanner = false;
+    go('login');
+  },
+  close: closeOverlay
+};
+
+// 演示控制：模拟手表、网络、后端和系统事件
+const PA = {
+  watch() {
+    if (!S.user) return log('手表发来一组：手机未登录，不保存、不回确认，这一组留在手表上');
+    // 手表消息不带账号：新训练归当前账号，已有训练归原账号（D-31）
+    let owner = S.watch && S.accounts[S.watch.owner];
+    let w = owner && owner.workouts.find(x => x.id === S.watch.wid);
+    if (!w) {
+      w = { id: 'w' + ++seq.w, start: now(), end: now(), sync: 'pending', ver: 0, uploading: false, sets: [] };
+      acc().workouts.push(w);
+      S.watch = { owner: S.user, wid: w.id };
+      owner = acc();
+    }
+    const ex = ['哑铃弯举', '哑铃肩推', '卧推'][Math.floor(w.sets.length / 2) % 3];
+    const reps = 8 + Math.floor(Math.random() * 5);
+    const set = { id: 's' + ++seq.s, ex, reps, weight: null, est: reps, src: 'auto' };
+    w.sets.push(set);
+    w.end = now();
+    S.watch.lastSet = set.id;
+    log(`手表发来一组：${ex} ${reps} 次 → 已保存到手机${S.watch.owner === S.user ? '' : `（归原账号 ${S.watch.owner}）`}`);
+    w.ver++;
+    w.sync = 'pending';
+    if (S.watch.owner === S.user) {
+      toast(`收到手表的一组：${ex} ${reps} 次`);
+      scheduleSync();
+    }
+    render();
+  },
+  dup() {
+    if (!S.watch || !S.watch.lastSet) return log('还没有手表发来的组');
+    if (!S.user) return log('重复发送：手机未登录，不处理');
+    log(`重复收到同一组（${S.watch.lastSet}）：本地已有，只回确认，不新增`);
+  },
+  net() {
+    S.online = !S.online;
+    log(S.online ? '网络恢复：自动重试失败和待同步的记录' : '网络断开：记录照常保存在手机');
+    if (S.online && S.user) {
+      acc().workouts.forEach(w => { if (w.sync === 'failed') w.sync = 'pending'; });
+      scheduleSync(400);
+    }
+    render();
+  },
+  fail() {
+    S.failNext = !S.failNext;
+    log(S.failNext ? '下一次上传会失败' : '取消：下一次上传正常');
+    render();
+  },
+  expire() {
+    S.tokenValid = false;
+    log('登录凭据已过期：下一次上传时才会发现');
+    scheduleSync(300);
+    render();
+  },
+  relaunch() {
+    closeOverlay();
+    S.splash = true;
+    log('杀掉 App 并重新打开');
+    render();
+    setTimeout(() => {
+      S.splash = false;
+      go(S.user ? 'today' : 'login');
+      scheduleSync(600);
+    }, 900);
+  },
+  theme() {
+    S.theme = S.theme === 'light' ? 'dark' : 'light';
+    render();
+  },
+  reset() {
+    clearTimeout(syncTimer);
+    closeOverlay();
+    const theme = S.theme;
+    initState();
+    S.theme = theme;
+    log('重置演示数据');
+    go('login');
+  }
+};
+
+// ---------- 渲染 ----------
+function render() {
+  const phone = $('#phone');
+  phone.dataset.theme = S.theme;
+  const views = { login: () => vLogin(false), register: () => vLogin(true), today: vToday, history: vHistory, settings: vSettings, detail: vDetail };
+  if (!S.user && !['login', 'register'].includes(S.route)) S.route = 'login';
+  if (S.route === 'detail' && !findWorkout(S.detailId)) S.route = S.prevTab;
+  // 重渲染时保留登录表单里已经输入的内容
+  const typed = $('#f-user') && !$('#overlay').contains($('#f-user')) ? [$('#f-user').value, $('#f-pass').value] : null;
+  const screen = $('#screen');
+  screen.innerHTML = views[S.route]() + (S.splash ? '<div class="splash">Rep<b>Flow</b></div>' : '');
+  if (typed && $('#f-user')) [$('#f-user').value, $('#f-pass').value] = typed;
+  // 详情页是导航栈里的一层，和 iOS 一样保留底部 Tab
+  const tabbed = !['login', 'register'].includes(S.route);
+  screen.classList.toggle('bare', !tabbed);
+  const tabbar = $('#tabbar');
+  tabbar.hidden = !tabbed || S.splash;
+  tabbar.innerHTML = [['today', 'today', '今天'], ['history', 'list', '历史'], ['settings', 'gear', '设置']]
+    .map(([t, icon, label]) => `<button class="${S.prevTab === t ? 'on' : ''}" data-a="tab" data-t="${t}">${ic(icon, 24, 2)}${label}</button>`).join('');
+  $('#clock').textContent = hm(now());
+  $('#net').innerHTML = S.online ? ic('wifi', 17, 2.2) : `${ic('off', 17, 2.2)}无网络`;
+  renderPanel();
+}
+function renderPanel() {
+  $('#p-state').innerHTML = `当前：${S.user ? `已登录 <b>${S.user}</b>` : '未登录'} · ${S.online ? '在线' : '断网'} · ${S.tokenValid ? '凭据有效' : '凭据已过期'}`;
+  $('#p-net').textContent = S.online ? '断开网络' : '恢复网络';
+  $('#p-net').classList.toggle('on', !S.online);
+  $('#p-fail').classList.toggle('on', S.failNext);
+  $('#p-theme').textContent = S.theme === 'light' ? '切换深色' : '切换浅色';
+  $('#p-log').innerHTML = S.log.map(t => `<li>${t}</li>`).join('');
+}
+
+$('#phone').addEventListener('click', e => {
+  const el = e.target.closest('[data-a]');
+  if (el) return void A[el.dataset.a](el.dataset);
+  if (e.target.id === 'overlay') closeOverlay();
+});
+$('#phone').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches('#f-user, #f-pass')) A[S.route === 'register' ? 'register' : 'login']();
+});
+$('#panel').addEventListener('click', e => {
+  const el = e.target.closest('[data-p]');
+  if (el) PA[el.dataset.p]();
+});
+setInterval(() => { $('#clock').textContent = hm(now()); }, 30e3);
+
+// 深链接：#/today、#/history、#/settings、#/register、#/detail/w1；?theme=dark；?shot 隐藏控制面板（截图用）
+initState();
+const params = new URLSearchParams(location.search);
+if (params.get('theme') === 'dark') S.theme = 'dark';
+if (params.has('shot')) document.body.classList.add('shot');
+const [, route, id] = location.hash.split('/');
+if (route && route !== 'login' && route !== 'register') {
+  S.user = 'demo';
+  if (route === 'detail') { S.detailId = id; S.prevTab = 'today'; }
+  else S.prevTab = route;
+  S.route = route;
+  if (!params.has('shot')) scheduleSync(1500);
+} else if (route === 'register') S.route = 'register';
+render();
+</script>
+</body>
+</html>
