@@ -10,6 +10,23 @@ from registry_guard import PACKAGE_URL, require_private
 class RegistryGuardTests(unittest.TestCase):
     @patch.dict("os.environ", GH_TOKEN="unit-test-only")
     @patch("registry_guard.urlopen")
+    def test_backup_packages_are_checked_and_other_packages_are_rejected(
+        self, open_request
+    ):
+        for package in ("repflow-postgres", "repflow-nginx"):
+            open_request.return_value = io.BytesIO(b'{"visibility":"private"}')
+            require_private(package_name=package)
+            self.assertEqual(
+                open_request.call_args.args[0].full_url,
+                PACKAGE_URL.replace("repflow-api", package),
+            )
+        open_request.reset_mock()
+        with self.assertRaises(RuntimeError):
+            require_private(package_name="../other")
+        open_request.assert_not_called()
+
+    @patch.dict("os.environ", GH_TOKEN="unit-test-only")
+    @patch("registry_guard.urlopen")
     def test_only_private_metadata_is_accepted(self, open_request):
         for visibility in ("private", "public", "internal", None):
             with self.subTest(visibility=visibility):

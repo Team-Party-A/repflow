@@ -7,13 +7,17 @@ import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-PACKAGE_URL = "https://api.github.com/orgs/Team-Party-A/packages/container/repflow-api"
+PACKAGE_NAMES = ("repflow-api", "repflow-postgres", "repflow-nginx")
+PACKAGE_ROOT = "https://api.github.com/orgs/Team-Party-A/packages/container/"
+PACKAGE_URL = PACKAGE_ROOT + "repflow-api"
 logger = logging.getLogger(__name__)
 
 
-def require_private(allow_missing=False):
+def require_private(allow_missing=False, package_name="repflow-api"):
+    if package_name not in PACKAGE_NAMES:
+        raise RuntimeError("Unexpected GHCR package name")
     request = Request(
-        PACKAGE_URL,
+        PACKAGE_ROOT + package_name,
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": "Bearer " + os.environ["GH_TOKEN"],
@@ -35,8 +39,10 @@ def require_private(allow_missing=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--allow-missing", action="store_true")
+    parser.add_argument("--package", choices=PACKAGE_NAMES, default="repflow-api")
     try:
-        require_private(parser.parse_args().allow_missing)
+        arguments = parser.parse_args()
+        require_private(arguments.allow_missing, arguments.package)
     except RuntimeError as error:
         logger.error("%s", error)
         raise SystemExit(1) from None
