@@ -1,0 +1,9 @@
+// 入库的公共设置。个人签名信息写在同目录的 Local.xcconfig（不入库），模板见 Local.xcconfig.example。
+
+// 免费开发者账号的 Bundle ID 不能跨 Team 重复，每人在 Local.xcconfig 里加个人后缀
+BUNDLE_ID_SUFFIX =
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"
+
+REPFLOW_BUNDLE_ID = io.github.teampartya.repflow$(BUNDLE_ID_SUFFIX)

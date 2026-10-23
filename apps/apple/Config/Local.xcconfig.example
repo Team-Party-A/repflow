@@ -1,0 +1,8 @@
+// 复制为同目录的 Local.xcconfig 后填写，该文件已被 .gitignore 忽略。
+// 只在真机安装时需要；只跑模拟器可以不建。
+
+// Xcode → Settings → Accounts 里个人 Team 的 ID（10 位字母数字）
+DEVELOPMENT_TEAM = ABCDE12345
+
+// 以点开头，只用小写字母和数字，例如 .wensharre
+BUNDLE_ID_SUFFIX = .yourname
