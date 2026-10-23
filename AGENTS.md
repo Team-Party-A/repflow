@@ -28,10 +28,10 @@ RepFlow 是一个用 Apple Watch 自动计次的健身记录 App：开组前选�
 | 模块 | 技术栈 | 构建 | 测试 | 格式化 / lint |
 | --- | --- | --- | --- | --- |
 | watch、ios | SwiftUI（iOS + watchOS） | `xcodebuild build`（scheme 待定） | `xcodebuild test`（XCTest、XCUITest） | SwiftFormat 或 SwiftLint（二选一，待定） |
-| backend | FastAPI + PostgreSQL | 待定 | `pytest --cov` | `ruff format`、`ruff check` |
+| backend | FastAPI + PostgreSQL | `docker build --target runtime -t repflow-api:local backend`（仓库根目录） | `uv run --locked pytest --cov=app`（backend 内，需测试库） | `uv run --locked ruff format`、`uv run --locked ruff check` |
 | ml | Python | — | `pytest` | `ruff format`、`ruff check` |
 | web | 待定 | 待定 | Cypress | ESLint + Prettier |
-| deploy | docker compose + nginx | `docker compose build` | 健康检查（待定） | — |
+| deploy | docker compose + nginx | Backend CI 构建并发布镜像 | `API_IMAGE=… TEST_IMAGE=… sh deploy/check.sh`（仓库根目录） | — |
 
 ## 3. 编码规范
 
@@ -166,9 +166,10 @@ smoothed = moving_average(samples, window=5)
 
 | 模块 | 检查命令 |
 | --- | --- |
-| backend、ml | `ruff format --check . && ruff check . && pytest` |
+| backend | `uv run --locked ruff format --check . && uv run --locked ruff check . && uv run --locked pytest --cov=app`（uv 0.13.5，需测试库；完整容器命令见 [部署说明](docs/deployment.md)） |
+| ml | `ruff format --check . && ruff check . && pytest` |
 | watch、ios | SwiftFormat / SwiftLint 检查（待定） + `xcodebuild test`（scheme 与 destination 待定） |
 | web | ESLint + Prettier 检查 + 构建（命令待定） |
-| deploy | `docker compose config` |
+| deploy | `docker compose config --quiet`（指定配置和环境变量，见 [部署说明](docs/deployment.md)）及 `sh deploy/check.sh` |
 
 任何一项失败都不能交付；不能为了通过检查而删除或跳过测试。
