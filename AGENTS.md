@@ -25,11 +25,13 @@ RepFlow 是一个用 Apple Watch 自动计次的健身记录 App：开组前选�
 
 | 模块 | 技术栈 | 构建 | 测试 | 格式化 / lint |
 | --- | --- | --- | --- | --- |
-| watch、ios | SwiftUI（iOS + watchOS）；部署目标 iOS 17.2.1、watchOS 10 | `xcodebuild build`（scheme 待定） | `xcodebuild test`（XCTest、XCUITest） | SwiftFormat 或 SwiftLint（二选一，待定） |
+| watch、ios | SwiftUI（iOS + watchOS）；部署目标 iOS 17.2、watchOS 10.0 | `xcodebuild build`（scheme 待定） | `xcodebuild test`（XCTest、XCUITest） | SwiftFormat 或 SwiftLint（二选一，待定） |
 | backend | FastAPI + PostgreSQL | 待定 | `pytest --cov` | `ruff format`、`ruff check` |
 | ml | Python | — | `pytest` | `ruff format`、`ruff check` |
 | web | 待定 | 待定 | Cypress | ESLint + Prettier |
 | deploy | docker compose + nginx | `docker compose build` | 健康检查（待定） | — |
+
+系统支持范围：工程的 Deployment Target 为 iOS 17.2、watchOS 10.0（Xcode 只能填到次版本号）；兼容验证基线为 iOS 17.2.1、watchOS 10.0 真机，最低版本验收在基线真机上做。
 
 ## 3. 编码规范
 
@@ -159,6 +161,8 @@ smoothed = moving_average(samples, window=5)
 5. 按规范提交，开 PR（人或 agent 都可以开），填写模板（包括 AI 参与说明）。
 6. 另一名成员审查，批准由人点。
 7. CI 通过后由人以 squash 方式合入，Issue 经 `Closes #N` 自动关闭，分支自动删除。
+
+第 6 步「另一名成员审查」只有一个例外：Wiki [团队章程](https://github.com/Team-Party-A/repflow/wiki/团队章程)「组长职责」一节的紧急通道，组长可以经 PR 绕过审查合入（仍不能直推或强推），适用条件和事后要求以章程为准。工程规范以本文件为准，团队分工和组长权限以章程为准。agent 不得使用紧急通道，也不得以它为由合并 PR。
 
 ## 9. 交付前必须跑通的检查
 
