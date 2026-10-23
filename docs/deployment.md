@@ -19,9 +19,11 @@ check.sh 创建独立临时 Compose 项目、内部测试库和假密码，执�
 
 CI 用 Ubuntu 24.04 两种原生架构执行相同检查；`install-ci-tools.sh` 只用于可丢弃 CI runner，从官方发布资产安装固定插件并核验 SHA-256。
 
+CI 还执行 `python3 deploy/mirror_images.py`，核对主 Compose 中的官方固定摘要及本地镜像架构；默认模式不发布、不读取 GHCR 凭据。只有 dev/main 的 push 允许 `--publish` 或 `--manifest`，PR 事件不会同步镜像。
+
 ## 2. 首次服务器准备
 
-以具有 sudo 的普通 SSH 用户操作。安装脚本目前限定 Ubuntu 26.04 amd64；已有活跃的系统 Docker/containerd 服务时停止，需先由负责人审查。
+以下服务器命令由负责人本人执行；agent 准备命令与文档、协助分析脱敏结果，不连接生产服务器或读取服务器上的真实 `.env`、拉取凭据。以具有 sudo 的普通 SSH 用户操作。安装脚本目前限定 Ubuntu 26.04 amd64；已有活跃的系统 Docker/containerd 服务时停止，需先由负责人审查。
 
 ```sh
 git clone --branch dev https://github.com/Team-Party-A/repflow.git "$HOME/repflow"
@@ -36,6 +38,8 @@ loginctl show-user "$(id -un)" -p Linger
 ## 3. 合入后发布与私有镜像拉取
 
 PR 只构建测试。人合入 dev/main 后，Backend 工作流在两种架构检查成功后发布私有 `ghcr.io/team-party-a/repflow-api`，标签为 `sha-完整提交号`，最后汇总多架构清单。Manifest 任务摘要给出 `API_IMAGE=...@sha256:...`。
+
+独立的 Backup mirror 两种架构任务同步官方 PostgreSQL/nginx，Backup mirror index 汇总已验证的双架构索引，并输出 `POSTGRES_IMAGE`、`NGINX_IMAGE` 的 GHCR 摘要和对应官方来源。两个备用包分别为 `repflow-postgres`、`repflow-nginx`，也必须保持 private、授权本仓库工作流访问。备用任务失败不阻断独立的 API 发布任务，但工作流会报错，首次真实发布仍须验收。
 
 若组织策略阻止包创建或工作流访问，负责人协调组长授予该仓库包发布权限。包保持 private，继承源仓库访问权限；发布前后可见性检查必须通过。
 
@@ -76,12 +80,27 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml logs --tail 100 api
 | 当前 | 首次部署时填写 | 首次部署时填写 | 首次部署时填写 | 待验收 |
 | 上一版 | 首次部署暂无 | 首次部署暂无 | 首次部署暂无 | 暂无 |
 
+### Docker Hub 不可达时使用 GHCR 备用
+
+先确认 Backup mirror index 任务成功，由负责人把任务摘要给出的 `POSTGRES_IMAGE`、`NGINX_IMAGE` 填入真实 `.env`。同步沿用主 Compose 中的版本和官方来源摘要，不重建镜像；GHCR 索引摘要可能与官方索引不同，必须使用任务实际输出，不能自行替换镜像域名后沿用旧摘要。
+
+```sh
+set -eu
+docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.ghcr.yaml config --quiet
+docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.ghcr.yaml pull
+docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.ghcr.yaml up -d --wait --wait-timeout 120
+curl --fail --silent --show-error http://127.0.0.1:8080/health
+```
+
+切换后，启动、更新、日志及回退都沿用这两个 `-f` 参数，并在部署记录中保存三个镜像摘要及是否启用备用配置。项目名、网络和数据库卷不变；不删除卷。恢复官方源时先拉取主 Compose 的官方镜像，再不带备用配置执行 up。此方案仍依赖 CI 能从 Docker Hub 拉取源镜像，实际同步、服务器只读凭据拉取及备用三服务启动须在合入后验证。
+
 ## 5. 交付验收记录
 
 - PR 阶段附两种架构 CI 链接、格式检查/pytest/覆盖率结果及 Compose 恢复检查结果。
 - 合入后附 GHCR 发布运行、提交号和摘要；服务器地址、配置和凭据均省略。
+- 核实两个备用包为 private、两种架构内容核对成功，记录实际 GHCR 摘要；实际使用备用配置时，再补服务器拉取及三服务健康检查结果。
 - 服务器验证外网 GET /health 为 200、其他入口为 404，只有 nginx 映射 8080。
 - 退出 SSH 后重连，以及 `systemctl --user restart docker` 后，确认三个服务恢复、健康检查成功且数据库卷保留。
-- 记录部署、更新、回退的实际结果；尚未执行的项目写明待验收。合入时 Issue 自动关闭不能代替部署验收。
+- 记录部署、更新、回退的实际结果；尚未执行的项目写明待验收。骨架 PR 使用 `Refs #33`，合入后保留任务开放；部署验收完成后，由后续验收 PR 使用 `Closes #33` 完成闭环。
 
 本次未部署业务接口；HTTPS 在登录及客户端联调前落实。当前空库角色用于骨架验证，实际数据接入前补业务权限、备份恢复及资源参数验证。
