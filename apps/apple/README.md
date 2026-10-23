@@ -4,8 +4,31 @@ RepFlow 的 Xcode 工程：一个工程，两个 App target（iOS、watchOS）�
 
 ## 环境
 
-- Xcode 27.1（全组统一，自带 `swift-format`，不用另装工具）
+- Xcode 27.1，全组统一。它自带 `swift-format`，不用另装工具。
+- Xcode 27.1 只能装在 **Apple 芯片**的 Mac 上，而且 macOS 要 **Tahoe 26.6 或更新**。芯片和系统版本在「左上角苹果菜单 → 关于本机」里看。
 - 部署目标：iOS 17.2、watchOS 10.0
+
+### 装不了 Xcode 27.1 怎么办
+
+| 你的 Mac | 做法 |
+| --- | --- |
+| Apple 芯片，macOS Tahoe 26.0 到 26.5 | 到「系统设置 → 通用 → 软件更新」升到最新的 26.x，再从 App Store 装 Xcode 27.1。首选这条路 |
+| Apple 芯片，macOS Sequoia 15.x | 能升级到 Tahoe 26.6 或更新就先升级，升级前用时间机器备份。不想升或升不了，按下一行处理 |
+| Intel 芯片，或者系统不能升级 | 装旧版 Xcode 26.x，按下面的限制使用 |
+
+旧版 Xcode 按 macOS 版本选（完整对照见 [Apple 官网](https://developer.apple.com/xcode/system-requirements)）：
+
+- macOS Tahoe 26.2 或更新：Xcode 26.6
+- macOS Sequoia 15.6 或更新：Xcode 26.3
+
+App Store 只提供最新版。旧版要到 <https://developer.apple.com/download/all> 用 Apple ID 登录，搜索版本号，下载 `.xip`，双击解压后把 Xcode 拖进「应用程序」。本工程用了 Xcode 16 才有的文件夹格式，Xcode 16 以下打不开。
+
+用旧版 Xcode 有这些限制：
+
+1. 写代码、跑模拟器、跑测试和格式检查都没问题。下文测试命令里的模拟器名称你本机可能没有，用 `xcrun simctl list devices available` 查出本机的名称再替换。在 PR 的「怎么测的及结果」里写明你用的 Xcode 版本和模拟器。
+2. 真机不一定装得上。如果 iPhone 或手表的系统版本比这个 Xcode 支持的新（比如 Xcode 26.3 最高支持 iOS 26.2，手机已经是 iOS 27），Xcode 会提示不支持这台设备。遇到这种情况，请装了 27.1 的组员帮你装真机。
+3. 打开工程后，如果 `git status` 显示 `RepFlow.xcodeproj/` 下有改动，那是旧版 Xcode 改写了工程文件，不要提交。在 `apps/apple/` 下运行 `git checkout -- RepFlow.xcodeproj` 撤掉。
+4. 管理设备用菜单 Window → Devices and Simulators，旧版本没有 DeviceHub。
 
 ## 目录
 
@@ -44,7 +67,7 @@ RepFlow 的 Xcode 工程：一个工程，两个 App target（iOS、watchOS）�
 ## 装到真机（iPhone + Apple Watch）
 
 1. 用线把 iPhone 连到 Mac，iPhone 上弹出「要信任此电脑吗」时点信任。
-2. 在 Xcode 的 Device Hub 里选中你的 iPhone，点 Pair 完成配对。旧版本 Xcode 里这个入口叫 Window → Devices and Simulators。
+2. 打开 DeviceHub，选中你的 iPhone，点 Pair 完成配对。DeviceHub 是 Xcode 27 自带的独立 App，在 `Xcode.app/Contents/Applications/` 里，不用另外下载，用 Spotlight 搜「DeviceHub」就能打开。
 3. 配对后，iPhone 的「设置 → 隐私与安全性」最下面会出现「开发者模式」，打开它并按提示重启。手表要先和这台 iPhone 配对，然后在手表的「设置 → 隐私与安全性」里同样打开开发者模式。
 4. 顶部选 scheme `RepFlow`，运行目标选你的 iPhone，点 Run。手表 App 打包在 iOS App 里：装好后在 iPhone 的 Watch App →「可用的 App」里安装 RepFlow。也可以选 scheme `RepFlowWatch`、运行目标选手表，直接 Run。
 5. 第一次打开时，iPhone 会提示「不受信任的开发者」。到「设置 → 通用 → VPN 与设备管理」里信任你的 Apple ID。
