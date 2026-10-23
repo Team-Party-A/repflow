@@ -1,5 +1,3 @@
-> **草案 v0，待第 1 次组会表决**
-
 # AGENTS.md
 
 本文件是人和 agent 共用的工程规范，也是唯一的规范来源。Codex 直接读取本文件；Claude Code 通过根目录 `CLAUDE.md` 中的 `@AGENTS.md` 加载本文件。不要在 `CLAUDE.md` 里另写规则。
@@ -27,7 +25,7 @@ RepFlow 是一个用 Apple Watch 自动计次的健身记录 App：开组前选�
 
 | 模块 | 技术栈 | 构建 | 测试 | 格式化 / lint |
 | --- | --- | --- | --- | --- |
-| watch、ios | SwiftUI（iOS + watchOS） | `xcodebuild build`（scheme 待定） | `xcodebuild test`（XCTest、XCUITest） | SwiftFormat 或 SwiftLint（二选一，待定） |
+| watch、ios | SwiftUI（iOS + watchOS）；部署目标 iOS 17.2.1、watchOS 10 | `xcodebuild build`（scheme 待定） | `xcodebuild test`（XCTest、XCUITest） | SwiftFormat 或 SwiftLint（二选一，待定） |
 | backend | FastAPI + PostgreSQL | 待定 | `pytest --cov` | `ruff format`、`ruff check` |
 | ml | Python | — | `pytest` | `ruff format`、`ruff check` |
 | web | 待定 | 待定 | Cypress | ESLint + Prettier |
@@ -108,9 +106,11 @@ smoothed = moving_average(samples, window=5)
 与 [CONTRIBUTING.md](CONTRIBUTING.md) 一致，摘要如下：
 
 - 从 `dev` 拉出 `feature/<模块>-<简述>` 或 `bugfix/<简述>`，完成后经 PR 合回 `dev`。
-- 提交信息：`<type>(<scope>): <subject>`，例如 `feat(watch): add peak-based rep counter`。
+- 提交信息：`<type>(<scope>): <subject>`，例如 `feat(watch): 新增基于峰值的计次`。
   - type：`feat`、`fix`、`refactor`、`docs`、`style`、`test`、`perf`、`ci`、`chore`
   - scope：`watch`、`ios`、`backend`、`web`、`ml`、`deploy`、`docs`
+  - subject、PR 描述和文档以中文为主；代码标识符、命令和专有名词保持原文。
+- PR 标题必须符合上面的提交信息格式：`dev` 和 `main` 只允许 squash 合并，squash commit 默认用 PR 标题。
 - 一个提交只做一件事；一个 PR 只对应一个 Issue，diff 尽量不超过 400 行。
 
 ## 5. 接口契约
@@ -158,7 +158,7 @@ smoothed = moving_average(samples, window=5)
 4. 作者逐段读懂代码，在本地跑通测试和格式化；看不懂的地方让 agent 解释。
 5. 按规范提交，开 PR（人或 agent 都可以开），填写模板（包括 AI 参与说明）。
 6. 另一名成员审查，批准由人点。
-7. CI 通过后由人合入，Issue 经 `Closes #N` 自动关闭。
+7. CI 通过后由人以 squash 方式合入，Issue 经 `Closes #N` 自动关闭，分支自动删除。
 
 ## 9. 交付前必须跑通的检查
 

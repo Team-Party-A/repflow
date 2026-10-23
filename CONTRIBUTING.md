@@ -1,5 +1,3 @@
-> **草案 v0，待第 1 次组会表决**
-
 # 贡献指南
 
 本文件规定分支、提交信息、PR 与 Issue 的用法。人和 agent 都要遵守；agent 额外遵守 [AGENTS.md](AGENTS.md)。
@@ -15,7 +13,8 @@
 | `release/vX.Y` | 阶段检查前冻结用 | 只修 bug，合入 `main` 和 `dev` |
 
 - `<模块>` 取值与提交信息的 scope 一致：`watch`、`ios`、`backend`、`web`、`ml`、`deploy`、`docs`。
-- `main` 和 `dev` 两个受保护分支都要开启：必须经过 PR、至少 1 名非作者批准、CI 通过、禁止强制推送。（保护规则在组会表决后配置。）
+- `main` 和 `dev` 两个受保护分支由 ruleset `protect-dev-main` 保护：必须经过 PR、至少 1 名非作者批准、只允许 squash 合并、禁止强制推送和删除。CI 就绪后再把 CI 设为必需检查。
+- PR 合入后源分支自动删除。
 - 任何人都不直接向 `main` 或 `dev` 推送。
 
 ## 2. 提交信息
@@ -26,16 +25,17 @@
 <type>(<scope>): <subject>
 ```
 
-示例：`feat(watch): add peak-based rep counter`
+示例：`feat(watch): 新增基于峰值的计次`
 
 - **type**：`feat`、`fix`、`refactor`、`docs`、`style`、`test`、`perf`、`ci`、`chore`
 - **scope**：`watch`、`ios`、`backend`、`web`、`ml`、`deploy`、`docs`
-- **subject**：全组统一用一种语言（中文或英文，第 1 次组会决定），不混用。
+- **subject**：以中文为主；代码标识符、命令和专有名词保持原文。PR 描述、Issue 和文档同样以中文为主。
 - 原子化、频繁提交：一个提交只做一件事。
 
 ## 3. PR 与代码审查
 
 - 一个 PR 对应一个 Issue，描述里写 `Closes #<编号>`。
+- **PR 标题必须符合第 2 节的提交信息格式**。`dev` 和 `main` 只允许 squash 合并，squash commit 默认用 PR 标题，因此 PR 标题就是 `dev` 上留下的那条提交信息。
 - diff 尽量控制在 400 行以内（生成文件不算）。AI 一次生成的大块代码要拆开提交。
 - 按 [PR 模板](.github/pull_request_template.md) 填写，以下各项必填：
   - 关联 Issue
