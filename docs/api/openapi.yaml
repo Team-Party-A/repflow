@@ -5,9 +5,10 @@ info:
   summary: '#32 评审草案；尚未冻结，不代表业务接口已经实现'
   description: |
     依据 docs/requirements/01-ios.md、02-watch.md、03-backend.md、
-    docs/prototype/README.md 和 docs/adr/0001-backend-stack.md。
+    docs/prototype/README.md、docs/adr/0001-backend-stack.md，
+    并与已合入 #51 的 docs/data/02-watch-phone-messages.md 对齐。
     本稿由 Codex 协助起草，后端负责人已确认讨论方案；仍需客户端共同审查。
-    只约定 HTTP 数据与行为，不设计业务表。x-pending-confirmations 中的项尚未对齐。
+    只约定 HTTP 数据与行为，不设计业务表。统计口径已确认，同步时延留到联调实测。
 
     【认证与账号】首次注册及登录需联网；成功后签发固定有效 365×24 小时的随机 token，
     不续期。请求通过 HTTPS 和 Authorization: Bearer 发送，禁止放在 URL 中。
@@ -23,13 +24,25 @@ info:
 
     【版本与写入】每条训练由同一部 iPhone 连续维护 revision，从 1 起递增，允许跳号。
     保存、编辑、增删组、接收新的手表记录或结束信息时，内容与新 revision 一起本地持久化；
-    同一次修改的重试保持同一 ID、revision 和内容，不能把 #34 的消息格式 version 当成 revision。
+    同一次修改的重试保持同一 ID、revision 和内容，不能把手表消息格式 version 当成 revision；重复消息或 ack 不推进 revision。
     首次 PUT 可接受任意合法 revision；已有有效记录仅接受更大版本并原子替换全部内容。
     同版本、同规范化内容返回 200 且不重写；同版本不同内容或更小版本返回 409。
     比较时忽略对象键顺序，UUID 统一小写，时间比较 UTC 时刻；组数组顺序属于内容。
     并发请求也必须原子判定版本，失败不得留下部分组或消耗版本。成功表示已经持久化。
     仅上传真实、已确认且本地保存的组；候选组、模板、传感器录制和回放不得上传。
     record_kind 只声明数据用途，后端不据此宣称能够识别真实动作。
+
+    【手表消息映射】按 docs/data/02-watch-phone-messages.md 沿用小写 UUIDv4，
+    手机手动记录采用相同 ID 规则，不重新映射手表 ID；组 ID 固定归属一条训练。
+    started_at、ended_at、time_zone 同名同义，使用事件发生时间与训练开始时记录的时区。
+    结束消息总在所有组之后到达：手表收齐清单内所有组的手机业务 ack 后才发送结束，
+    手机无需暂存结束消息等待缺失组；此顺序指手表确认保存的组，不包含手机后来手动增加的组。
+    手机持久化后才 ack；重复组、重复结束或已删除记录的旧补发只确认处理，不覆盖编辑或恢复删除。
+    去重、删除和结束交接标记独立于可编辑记录；已有训练沿用原账号，首次接收绑定当时登录账号。
+    手机映射时添加 record_kind=actual 与本地 revision；手表固定 weight_grams=null，手机可补填。
+    组级时间 set_started_at、set_ended_at 只保存在手机本地，不上传；组顺序通过 sets 数组表达，
+    手表新组按 set_index 确定相对顺序，旧补发不改变手机已编辑的顺序；HTTP 不另传 set_index。
+    exercise_id 来自双端共享字典；具体支持名单由客户端与算法确认，示例不冻结名单。
 
     【删除】删除使 revision 递增，手机持久化删除任务；即使没有收到过上传成功回执也排队删除。
     后端对尚不存在的 ID 也接受删除并保留标记，以阻止在途上传。有效记录仍按版本比较执行删除。
@@ -49,39 +62,24 @@ info:
     游标只绑定账号、时间筛选和上次排序位置，不提供跨页快照；持续写入时可刷新从首页重取。
     统计必须取齐目标范围，不把单页当全量；动作筛选后只汇总命中动作的组。
     训练次数按至少有一组命中的训练去重，组数与动作总次数据有效组和 final_rep_count 计算。
-    时间筛选按训练开始时刻，左闭右开；页面用选定时区换算 UTC 边界，比较结果时使用同一时区。
-    本周建议周一起算；本周/月与原型近 7/30 天的差异及同步 X/Y/Z 时延仍待共同确认。
+    时间筛选按训练开始时刻，左闭右开；统计按手机当前时区，周一起算，统计本周／本月。
+    本周从当地周一 00:00 至下周一 00:00，本月从当地月初 00:00 至下月初 00:00，
+    先确定日历边界再换算 UTC；不采用滚动近 7／30 天，也不用记录的发生地 time_zone 决定统计范围。
+    手机当前时区变化后按新时区重算；跨端比较使用相同统计时区和范围，HTTP 只传 UTC 边界。
+    原型近 7／30 天展示需在客户端实现时对齐本口径，本 PR 不修改客户端原型。
+
+    【同步时延】REQ-NFR-003 的 X/Y/Z 留到最低支持版本配对真机联调实测，
+    记录设备、系统版本、网络及前后台条件后共同评审，不把未测数值作为验收承诺。
   x-contract-status: draft
-  x-pending-confirmations:
-    - id: W34-ID
-      status: 待确认
-      owners: [hulaoyagg, wenshare71, whj-thu]
-      issue: https://github.com/Team-Party-A/repflow/issues/34
-      description: '#34 已要求手表生成训练/组 UUID 并跨端沿用；UUIDv4、大小写规范、手机手动建组及 ID 归属冲突处理尚需共同确认。'
-    - id: W34-EXERCISE
-      status: 待确认
-      owners: [wenshare71, whj-thu, shooterli, hulaoyagg]
-      description: 'exercise_id 键值与共享动作字典、支持名单、各动作重量含义待对齐；示例不是支持名单，不从传感器数据集编号推定产品枚举。'
-    - id: W34-TIME
-      status: 待确认
-      owners: [whj-thu, wenshare71, hulaoyagg]
-      description: '训练开始/结束事件和发生地 time_zone 如何经 #34 交接待确认；结束消息可先于组消息到达，手机需合并完整记录并推进 revision，不能丢失迟到的有效组。'
-    - id: W34-COUNT
-      status: 待确认
-      owners: [whj-thu, wenshare71, shooterli, hulaoyagg]
-      description: '原估计次数与来源的字段映射待确认；自动计次修正后保留原估计与 automatic 来源，不把修正后的值伪装成原始算法结果。'
-    - id: W34-RETRY
-      status: 待确认
-      owners: [whj-thu, wenshare71, hulaoyagg]
-      description: '手机编辑/删组/删训练后收到手表旧补发时，按 set_id 去重且不覆盖或恢复；本地持久化后才 ack，已有训练归原账号；原子持久化、删除记忆与 ack 细节由 #34 对齐。'
+  x-client-decisions:
     - id: CLIENT-STATS
-      status: 待确认
+      status: 已确认
       owners: [wenshare71, shooterli, hulaoyagg]
-      description: 'iOS/Web 确认查看时区、周一周起点，以及需求本周/月与原型近 7/30 天的展示差异；HTTP 仅传 UTC 范围。'
+      description: 按手机当前时区、周一起算、统计本周／本月；客户端换算 UTC 查询边界。
     - id: CLIENT-LATENCY
-      status: 待确认
+      status: 联调实测
       owners: [wenshare71, whj-thu, hulaoyagg]
-      description: 'REQ-NFR-003 的 X/Y/Z 在最低版本真机测量并评审后填写；本草案不将候选数值写成承诺。'
+      description: REQ-NFR-003 的 X/Y/Z 在最低支持版本配对真机联调中测量并共同评审，不预填承诺。
 servers:
   - url: /api/v1
     description: 相对 API 前缀；部署地址通过不入库配置注入，实际连接必须使用 HTTPS
@@ -225,8 +223,7 @@ components:
       type: string
       format: uuid
       pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
-      description: UUIDv4，服务端统一输出小写；精确生成细则仍待 #34 确认
-      x-pending-confirmation: W34-ID
+      description: UUIDv4，跨端沿用原 ID，手机手动记录同规则；服务端统一输出小写
     Revision:
       type: integer
       format: int32
@@ -262,12 +259,11 @@ components:
       properties:
         revision: {$ref: '#/components/schemas/Revision'}
         record_kind: {type: string, const: actual, description: 仅真实已确认训练；不接收 template 或 replay}
-        started_at: {$ref: '#/components/schemas/UtcTime', x-pending-confirmation: W34-TIME}
+        started_at: {$ref: '#/components/schemas/UtcTime'}
         ended_at:
-          description: 未结束或无法确定结束时刻时为 null，不用接收时间伪造；非空时须不早于开始
+          description: 未结束、手表尚未完成结束交接或无法确定结束时刻时为 null，不用接收时间伪造；非空时须不早于开始
           anyOf: [{$ref: '#/components/schemas/UtcTime'}, {type: 'null'}]
-          x-pending-confirmation: W34-TIME
-        time_zone: {type: string, minLength: 1, maxLength: 64, description: 训练发生地 IANA 时区，如 Asia/Shanghai，不能用补发接收地覆盖, x-pending-confirmation: W34-TIME}
+        time_zone: {type: string, minLength: 1, maxLength: 64, description: 训练开始时记录的 IANA 时区，如 Asia/Shanghai，不能用补发接收地覆盖；不决定统计查看时区}
         sets: {type: array, minItems: 1, maxItems: 1000, description: 仅含真实已确认组；set_id 唯一，数组顺序有意义, items: {$ref: '#/components/schemas/WorkoutSet'}}
     WorkoutInput:
       allOf: [{$ref: '#/components/schemas/WorkoutFields'}]
@@ -286,10 +282,10 @@ components:
       required: [set_id, exercise_id, final_rep_count, estimated_rep_count, record_source, weight_grams]
       properties:
         set_id: {$ref: '#/components/schemas/ClientId'}
-        exercise_id: {type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_]*$', description: 稳定动作键而非显示名称；共享字典及重量含义待对齐，哑铃建议单只、杠铃含杆总重, x-pending-confirmation: W34-EXERCISE}
+        exercise_id: {type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_]*$', description: 稳定动作键而非显示名称，来自双端共享字典；具体支持名单及动作重量含义由客户端与算法确认}
         final_rep_count: {type: integer, minimum: 1, maximum: 9999, description: 用户最终确认值，历史和统计采用此值}
-        estimated_rep_count: {type: [integer, 'null'], minimum: 0, maximum: 2147483647, description: 自动计次原估计；手动为 null，不能用最终次数回填伪造, x-pending-confirmation: W34-COUNT}
-        record_source: {type: string, enum: [automatic, manual], description: 自动计次经过人工修正仍是 automatic, x-pending-confirmation: W34-COUNT}
+        estimated_rep_count: {type: [integer, 'null'], minimum: 0, maximum: 2147483647, description: 自动计次原估计；手动为 null，不能用最终次数回填伪造}
+        record_source: {type: string, enum: [automatic, manual], description: 自动计次经过人工修正仍是 automatic}
         weight_grams: {type: [integer, 'null'], minimum: 0, maximum: 1000000, description: 界面 kg，接口整数克，精度 1 克，上限 1000 kg；null 为未填写，0 是明确填写零}
       allOf:
         - if: {properties: {record_source: {const: manual}}}
