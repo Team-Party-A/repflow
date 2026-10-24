@@ -15,7 +15,7 @@ API_IMAGE=repflow-api:local TEST_IMAGE=repflow-tests:local sh deploy/check.sh
 python3 -m unittest discover -s deploy -p 'test_*.py' -v
 ```
 
-check.sh 创建独立临时 Compose 项目、内部测试库和假密码，执行 ruff、pytest、覆盖率、真实数据库连接、故障恢复、API 更换 IP、数据卷保留检查。配置测试只修改临时 nginx 副本：拒绝非法候选配置、重建后观察新增响应头、回退重建后确认响应头消失。退出时删除该临时项目及其卷。它显式隔离部署用 `.env`，不针对现有部署运行。
+check.sh 创建独立临时 Compose 项目、内部测试库和假密码，执行 ruff、pytest、覆盖率、真实数据库连接、暂停超时与故障恢复、API 更换 IP、数据卷保留检查。配置测试只修改临时 nginx 副本：拒绝非法候选配置、重建后观察新增响应头、回退重建后确认响应头消失。退出时删除该临时项目及其卷。它显式隔离部署用 `.env`，不针对现有部署运行。
 
 CI 用 Ubuntu 24.04 两种原生架构执行相同检查；`install-ci-tools.sh` 只用于可丢弃 CI runner，从官方发布资产安装固定插件并核验 SHA-256。
 
@@ -115,24 +115,31 @@ curl --fail --silent --show-error http://127.0.0.1:8080/health
 
 本次未部署业务接口；HTTPS 在登录及客户端联调前落实。当前空库角色用于骨架验证，实际数据接入前补业务权限、备份恢复及资源参数验证。
 
-## 6. 首次部署验收结果
+## 6. 部署与修复验收结果
 
-#43 已合入，部署代码为 `e935600b5c282a84bfae2e088f3e1e563f53ace9`。[首次 dev 发布](https://github.com/Team-Party-A/repflow/actions/runs/40085552373) 的 8 个任务全部成功；amd64、arm64 均通过 ruff、8 项 pytest（覆盖率 100%）和完整 Compose 检查，包含数据库故障恢复、API 换址、数据卷保留及 nginx 配置预检、更新与回退。API 和两个备用包的双架构发布、索引及发布时的 private 检查均通过。
+#43 的首次上线完成后，补充真实数据库暂停测试发现旧 API 在约 5 秒返回 504。该问题已由 #53 修复；当前部署使用已合入提交 `6ac6a944520c9bebd446dd90588fb6a5436d9591`，镜像来自对应 [dev 发布](https://github.com/Team-Party-A/repflow/actions/runs/40108125811)。发布的 8 个任务全部成功；amd64、arm64 均通过 ruff、14 项 pytest（语句／分支覆盖率 100%）和完整 Compose 检查，包含真实暂停数据库的 503 超时回归、故障恢复、API 换址、持久卷保留及 nginx 配置预检、更新与回退。API 和两个备用包的双架构发布、索引及发布时的 private 检查均通过。
 
-服务器使用已验证的 GHCR 备用配置，三个镜像均完成拉取，并核对为 linux/amd64 及下列固定摘要：
+服务器使用已验证的 GHCR 备用配置，三个镜像均完成拉取并核对为 linux/amd64；API 的 OCI revision 与上述完整提交一致：
 
 | 服务 | GHCR 镜像 | 索引 SHA-256 |
 | --- | --- | --- |
-| api | `ghcr.io/team-party-a/repflow-api` | `16cb26cd73762af9014380b0af1afa0219fd2879c388bb383b208594293bcde0` |
+| api | `ghcr.io/team-party-a/repflow-api` | `24fe12de07c694f55cad3238ad6028088c0af2269f3b5e4dca92fa46a3766a23` |
 | db | `ghcr.io/team-party-a/repflow-postgres` | `0b0844b1f07661520c0a86054babe09708700c607f0b727ea8b375ea456f3798` |
 | nginx | `ghcr.io/team-party-a/repflow-nginx` | `b5fc535518439dde758b576c1370d6fb4b6b6f89895350c8224e48348e596dce` |
 
 - Ubuntu 26.04 x86_64；Docker 29.9.2、Compose 5.6.1、Buildx 0.38.1、containerd.io 2.4.2（包修订 3）；Rootless 用户服务 active/enabled，Linger=yes。
-- `.env` 权限为 600，拉取凭据目录/文件权限为 700/600；主 Compose、GHCR 备用配置和 nginx 候选配置检查通过。未读取或回显真实配置和凭据。
-- nginx、api、db 正常运行，只有 nginx 发布宿主 8080；外网 `/health` 返回 `200 {"status":"ok"}`，其他路径返回 404。
-- 数据库停止时返回脱敏 503，恢复后返回 200；重建 api/db 后 nginx 可继续访问，数据库集群标识不变。补充真实暂停测试发现超时场景返回 504（约 5 秒），未满足约定的约 3 秒内返回 503；该项保持未通过，等待修复及重新部署验收。
-- 退出 SSH 后重新连接、重启用户级 Docker 后，三个服务均恢复；健康检查通过，数据库集群标识及持久卷不变。业务库 public schema 表数量仍为 0。
-- 临时 SSH 下载转发、本机回环代理及服务器 Docker 代理配置已撤除；Docker 无代理环境变量，重启后的外网健康检查通过，服务运行不依赖本机。下载源、版本和摘要未改变，网络排障过程记录在 #33。
-- 当前与上一版记录在服务器私有目录 `$HOME/.local/state/repflow/deployment.json`，配置版本为 `initial-e935600-config-v1`。首次部署暂无上一版，未声称完成生产版本回退；后续按第 4 节保留卷和现有密码执行更新或回退。
+- `.env` 权限为 600，拉取凭据目录／文件权限为 700／600；主 Compose、GHCR 备用配置和 nginx 候选配置检查通过。更新只替换非敏感的 API_IMAGE 字段，其余设置及数据库密码原样保留，不回显配置或凭据。
+- nginx、api、db 正常运行，api/db healthy，只有 nginx 发布宿主 8080；外网 `/health` 返回 `200 {"status":"ok"}`，其他路径返回 404。
+- 真实暂停 PostgreSQL 后，已有连接、重复请求及 API 冷启动三个场景均在约 3 秒返回 `503 {"status":"unavailable"}`，并带 `Cache-Control: no-store`；恢复数据库后回到 200。数据库停止与恢复场景也通过。具体实测耗时记录在 #33。
+- 重建 api/db 后 nginx 可继续访问；退出 SSH 后重新连接，以及重启用户级 Docker 后，三个服务均恢复。数据库集群标识及持久卷与更新前一致，业务库 public schema 表数量仍为 0。
+- 临时 SSH 下载转发、本机回环代理及服务器临时代理服务、Docker 代理环境变量均已撤除；撤除后重启 Docker，外网健康检查通过，服务运行不依赖本机。镜像来源、版本和摘要未改变。
+- 当前及上一版记录保存在服务器私有目录 `$HOME/.local/state/repflow/deployment.json`，目录／文件权限为 700／600；配置文件摘要与验收结果一并记录。当前配置版本为 `release-6ac6a94-config-v2`。
 
-正常部署链路已打通，真实数据库暂停场景的超时验收尚未通过；完成修复、发布和重验后再由验收 PR 关闭 #33。业务接口和表结构仍待契约对齐，HTTPS 在登录及客户端联调前完成。服务器地址和敏感配置不进入仓库、Issue 或 PR。
+| 角色 | 代码提交 | API 索引摘要 | 验收状态 |
+| --- | --- | --- | --- |
+| 当前 | `6ac6a944520c9bebd446dd90588fb6a5436d9591` | `24fe12de07c694f55cad3238ad6028088c0af2269f3b5e4dca92fa46a3766a23` | 本节部署与故障恢复检查通过 |
+| 上一版 | `e935600b5c282a84bfae2e088f3e1e563f53ace9` | `16cb26cd73762af9014380b0af1afa0219fd2879c388bb383b208594293bcde0` | 正常链路通过，暂停数据库超时未通过；不能视为已全面验收的回退版本 |
+
+本次执行了真实版本更新，未执行生产版本回退；nginx 配置回退已在双架构 CI 验证。后续更新或回退按第 4 节保留现有数据库卷和密码，并重新验证；不要仅因上一版镜像仍在缓存中就认为其所有故障场景已通过。
+
+后端健康检查的构建、测试、私有镜像发布、部署和恢复链路已验收；#33 由验收 PR 经人工审查合入后关闭。业务表与业务接口另按客户端需求及 API 契约推进，HTTPS 在登录及客户端联调前完成。服务器地址和敏感配置不进入仓库、Issue 或 PR。
