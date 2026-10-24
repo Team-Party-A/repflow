@@ -1,9 +1,9 @@
-# 手表 ↔ 手机消息格式 v1（评审提案）
+# 手表 ↔ 手机消息格式 v1
 
-负责人：@whj-thu；接收方审查：@wenshare71；关联 #34。
+负责人：@whj-thu；接收方：@wenshare71；关联 #34。
 依据 [watchOS 需求](../requirements/02-watch.md) REQ-WATCH-003–006、REQ-NFR-201，
 [iOS 需求](../requirements/01-ios.md) REQ-IOS-002、003、006、007，及 D-03。
-本稿经受影响模块负责人批准、合入 dev 后冻结；当前不代表传输代码或真机联调已完成。
+本契约合入 dev 即冻结；当前不代表传输代码或真机联调已完成。
 
 ## 1. 通道与封装
 
@@ -18,8 +18,8 @@
 - JSON 不接受 NaN、Infinity，数值字段不能用字符串或布尔值代替。
   未知 type/version 或非法已知字段不写业务库、不回 ack，保留待处理记录并提示升级／处理错误。
   接收方忽略额外的 payload 字段；变更字段含义、类型或必填性需升 version 并走契约评审。
-- 单条 payload 上限建议 64 KiB，结束消息最多 1000 个组 ID；这是本稿应用层提案，不是 Apple 的传输限额。
-  超限不截断、不分段冒充完整训练，保留本地记录并显式报错；上限与 #32 一起评审。
+- 单条 payload 上限 64 KiB，结束消息最多 1000 个组 ID；这是本契约的应用层上限，不是 Apple 的传输限额。
+  超限不截断、不分段冒充完整训练，保留本地记录并显式报错。
 
 [Apple transferUserInfo 文档](https://developer.apple.com/documentation/watchconnectivity/wcsession/transferuserinfo(_:))
 规定使用属性列表值及已激活 session。API 在 watchOS 10 基线内；可靠性验收必须用配对真机，不能用浏览器原型或模拟器替代。
@@ -61,8 +61,8 @@
 | set_started_at、set_ended_at | 本组开始计次／停止接收计次时刻，不是用户确认保存时刻；started_at ≤ set_started_at ≤ set_ended_at |
 | set_index | 本次训练已确认组的顺序，正整数，从 1 连续增加；放弃组不占位；保存时确定后不变 |
 | exercise_id | 两端共享代码中稳定的动作键，`^[a-z][a-z0-9_]*$`，1–64 字符；不传显示名称 |
-| final_rep_count | 用户确认的整数，建议 1–9999；0、负数、小数不可保存，1／2 次短组合法 |
-| estimated_rep_count | 原自动估计的整数，建议 0–9999；不能用修正后的最终次数回填；越界保留本地并报错，不截断原值 |
+| final_rep_count | 用户确认的整数，1–9999；0、负数、小数不可保存，1／2 次短组合法 |
+| estimated_rep_count | 原自动估计的整数，0–2147483647；不能用修正后的最终次数回填；仅作诊断，不影响该组交接 |
 | record_source | 固定 `automatic`；自动计次后人工修正仍是 automatic |
 | weight_grams | v1 手表固定 null，表示未填写；重量录入不是 Watch Must，手机补填后旧补发不得覆盖 |
 
@@ -217,23 +217,23 @@ let envelope: [String: Any] = ["type": messageType, "version": 1, "payload": dat
 session.transferUserInfo(envelope)
 ```
 
-## 5. 与其他契约的对应及待确认项
+## 5. 与其他契约的对应
 
 动作列表在 iOS/watchOS 共享代码维护，不通过本协议同步；`exercise_id` 只查共享字典，
 未知键保留待处理并提示更新，不能猜名称。示例 dumbbell_curl 不冻结产品支持名单。
 共享实现及动作支持范围由 watchOS、iOS、算法协商，本任务不新增业务动作表。
 
-| #32 / PR #49 对齐项 | 本稿提案与接收方工作 |
+| #32 / PR #49 对齐项 | 本契约结论（#49 照此执行） |
 | --- | --- |
 | W34-ID | UUIDv4 小写、跨端原 ID、冲突不覆盖；手机手动 ID 同规则 |
 | W34-EXERCISE | 稳定 exercise_id、共享字典，名单待算法确认；Watch 重量 null，手机可补填 |
 | W34-TIME | started_at / ended_at / time_zone 同名同义；手表收齐组 ack 才发送结束；手机无需暂存结束等组 |
-| W34-COUNT | final_rep_count 建议 1–9999，estimated_rep_count 建议 0–9999；修正不改变 automatic；#49 当前估计上限 2147483647，建议同步收紧，待后端及算法确认 |
+| W34-COUNT | final_rep_count 1–9999，estimated_rep_count 0–2147483647，与 #49 一致；修正不改变 automatic |
 | W34-RETRY | 手机维护 revision；去重／删除／结束交接标记独立于可编辑记录，旧消息不覆盖、不恢复；不保存原始快照 |
 
 手机映射 #32 时添加 record_kind=actual 与其本地 revision；重量未填映射 null。
 未完成结束交接时 ended_at 为 null，不能以最后组接收时间替代。
-#49 目前为草案：双方批准各自 PR 后才冻结，不在本 PR 修改后端契约或宣称其待决项已获所有负责人同意。
+本 PR 不修改后端契约文件；#49 按上表删除 W34 待确认标记。
 
 ## 6. 联调验收清单
 
@@ -255,10 +255,8 @@ session.transferUserInfo(envelope)
 | 同 set_id 同 workout_id 的合法字段值变化／跨训练复用 ID | 前者按 ID 直接 ack、不覆盖；后者不 ack、不改变归属 |
 | 不匹配 ack、未知版本、非法计次／时区 | 不改已有记录，不清发件箱 |
 | 已知版本增加额外字段／重复触发登录通知 | 忽略额外字段；在途 retry_pending 未完成时不再排队 |
-| 原估计 0／9999／10000 | 前两者可交接（最终次数仍须 ≥ 1）；10000 保留本地并报错，不截断 |
 | 放弃候选、空训练、回放 | 均不生成训练消息；已有确认组及任务保持 |
 
-审查重点：@wenshare71 确认简化后的接收事务与结束发送条件；@hulaoyagg 对齐 #32 的归属、删除和字段；
-@shooterli 确认估计值、来源及共享动作键边界。真实设备时延及后台行为在联调中测量。
+真实设备时延及后台行为在联调中测量。
 
 由 Codex 协助起草；会话：RepFlow #34 消息契约与 #10 手表原型。
