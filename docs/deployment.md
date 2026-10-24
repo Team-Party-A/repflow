@@ -25,6 +25,8 @@ CI 还执行 `python3 deploy/mirror_images.py`，核对主 Compose 中的官方�
 
 以下服务器命令可由负责人执行，或由负责人明确授权的 agent 在指定服务器与任务范围内通过 SSH 执行；同一任务的已有授权持续有效，无需逐条重复确认。agent 可以在服务器直接生成服务密码并安全落盘配置，不回显明文，不读取或传播已有真实 `.env`、SSH 私钥和拉取凭据内容；个人账号登录或授权确需交互时再由负责人操作。部署工具正常使用配置，不将配置内容输出到日志或聊天。以具有 sudo 的普通 SSH 用户操作。安装脚本目前限定 Ubuntu 26.04 amd64；已有活跃的系统 Docker/containerd 服务时停止，需先由负责人审查。
 
+SSH 授权范围在对应 Issue 留下记录。删除数据卷、修改防火墙或云安全组、sshd、sudoers 等操作须有针对该操作的明确授权，不能仅依据任务级 SSH 授权执行；已取得的具体授权不重复询问。
+
 ```sh
 git clone --branch dev https://github.com/Team-Party-A/repflow.git "$HOME/repflow"
 cd "$HOME/repflow"
@@ -113,16 +115,24 @@ curl --fail --silent --show-error http://127.0.0.1:8080/health
 
 本次未部署业务接口；HTTPS 在登录及客户端联调前落实。当前空库角色用于骨架验证，实际数据接入前补业务权限、备份恢复及资源参数验证。
 
-## 6. 当前验收进度（2026-10-24）
+## 6. 首次部署验收结果
 
-- #43 已合入，发布提交为 `e935600b5c282a84bfae2e088f3e1e563f53ace9`。[首次 dev 发布](https://github.com/Team-Party-A/repflow/actions/runs/40085552373) 的 8 个任务全部成功，包含 API 和两个备用包的双架构发布、索引及发布时的 private 检查。
-- 负责人在本次会话明确允许 agent 通过生产服务器 SSH 推进 #33；agent 已执行只读预检及固定摘要 API 镜像拉取探针，未读取真实配置或凭据内容。
-- 服务器复查：Ubuntu 26.04、x86_64；Docker 29.9.2、Compose 5.6.1、Buildx 0.38.1、containerd.io 2.4.2（包修订 3）；Rootless 用户服务 active/enabled，Linger=yes。
-- 8080 当前空闲；这不代表云安全组已放行或外网验收通过。
-- 负责人已交互完成 GHCR 只读登录；凭据目录/文件权限复核为 700/600。API 和 nginx 的固定摘要镜像已完整拉取，nginx 候选配置检查通过；PostgreSQL 镜像仍在下载。鉴权问题已解决，三服务尚未启动。
-- 服务器直连 GitHub 检出超时，改用 Git 原生 bundle 经 SSH 传输已发布提交；bundle 在两端校验通过，检出固定为上述提交，origin 仍指向官方仓库。bundle 不含工作区、真实配置或凭据。
-- 数据库随机密码已通过服务器交互助手生成并落盘，不显示明文；`.env` 权限为 600，主 Compose 及 GHCR 备用 Compose 静默校验通过。负责人已确认后续此类服务配置可由 agent 直接生成和保存。
-- Docker Hub 注册表连接及 PostgreSQL 官方镜像拉取在本次超时预算内未完成，已采用确认过的 GHCR 备用配置。服务器直连 GHCR 的大层下载较慢，临时通过现有 SSH 加密连接和 Python 标准库转发官方 GHCR 的 TLS 流量；不解密 HTTPS，不读取或记录凭据，不开放公网代理端口，不更换镜像来源或摘要。下载完成后撤除临时代理并重启 Docker，确认运行不依赖本机；该清理、三服务启动、外网及恢复验收仍待完成。
-- 后续依次完成：剩余镜像拉取、临时通道清理、三服务健康检查、外网访问、SSH 退出和用户 Docker 重启恢复、数据卷核对及部署/回退记录。首次部署没有上一版时如实记录，不虚构回退结果。
+#43 已合入，部署代码为 `e935600b5c282a84bfae2e088f3e1e563f53ace9`。[首次 dev 发布](https://github.com/Team-Party-A/repflow/actions/runs/40085552373) 的 8 个任务全部成功；amd64、arm64 均通过 ruff、8 项 pytest（覆盖率 100%）和完整 Compose 检查，包含数据库故障恢复、API 换址、数据卷保留及 nginx 配置预检、更新与回退。API 和两个备用包的双架构发布、索引及发布时的 private 检查均通过。
 
-本节仅记录脱敏结果；本任务保持开放，部署验收完成后再由验收 PR 关闭 #33。
+服务器使用已验证的 GHCR 备用配置，三个镜像均完成拉取，并核对为 linux/amd64 及下列固定摘要：
+
+| 服务 | GHCR 镜像 | 索引 SHA-256 |
+| --- | --- | --- |
+| api | `ghcr.io/team-party-a/repflow-api` | `16cb26cd73762af9014380b0af1afa0219fd2879c388bb383b208594293bcde0` |
+| db | `ghcr.io/team-party-a/repflow-postgres` | `0b0844b1f07661520c0a86054babe09708700c607f0b727ea8b375ea456f3798` |
+| nginx | `ghcr.io/team-party-a/repflow-nginx` | `b5fc535518439dde758b576c1370d6fb4b6b6f89895350c8224e48348e596dce` |
+
+- Ubuntu 26.04 x86_64；Docker 29.9.2、Compose 5.6.1、Buildx 0.38.1、containerd.io 2.4.2（包修订 3）；Rootless 用户服务 active/enabled，Linger=yes。
+- `.env` 权限为 600，拉取凭据目录/文件权限为 700/600；主 Compose、GHCR 备用配置和 nginx 候选配置检查通过。未读取或回显真实配置和凭据。
+- nginx、api、db 正常运行，只有 nginx 发布宿主 8080；外网 `/health` 返回 `200 {"status":"ok"}`，其他路径返回 404。
+- 数据库停止时返回脱敏 503，恢复后返回 200；重建 api/db 后 nginx 可继续访问，数据库集群标识不变。
+- 退出 SSH 后重新连接、重启用户级 Docker 后，三个服务均恢复；健康检查通过，数据库集群标识及持久卷不变。业务库 public schema 表数量仍为 0。
+- 临时 SSH 下载转发、本机回环代理及服务器 Docker 代理配置已撤除；Docker 无代理环境变量，重启后的外网健康检查通过，服务运行不依赖本机。下载源、版本和摘要未改变，网络排障过程记录在 #33。
+- 当前与上一版记录在服务器私有目录 `$HOME/.local/state/repflow/deployment.json`，配置版本为 `initial-e935600-config-v1`。首次部署暂无上一版，未声称完成生产版本回退；后续按第 4 节保留卷和现有密码执行更新或回退。
+
+部署链路已验收；#33 通过验收 PR 经人工审查、合入后关闭。业务接口和表结构仍待契约对齐，HTTPS 在登录及客户端联调前完成。服务器地址和敏感配置不进入仓库、Issue 或 PR。
