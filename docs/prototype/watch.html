@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RepFlow · watchOS 可交互原型</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#E8E7DF;color:#171817;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+button,input,select{font:inherit}
+button{cursor:pointer}
+button:disabled{opacity:.42;cursor:not-allowed}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #739800;outline-offset:3px}
+button{touch-action:manipulation}
+a{color:inherit}
+h1,h2,p{margin:0}
+header{max-width:1120px;margin:auto;padding:36px 28px 22px;border-bottom:1px solid #c8c8bd}
+.brand{font-size:13px;letter-spacing:.16em;font-weight:800}
+.headline{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;margin-top:12px}
+h1{font-size:32px;letter-spacing:-1px}
+header p{font-size:14px;line-height:1.7;color:#5e6057;margin-top:10px}
+.workspace{max-width:1120px;margin:auto;display:grid;grid-template-columns:430px 1fr;gap:40px;padding:28px}
+.preview{display:flex;align-items:center;flex-direction:column}
+.preview-top{display:flex;justify-content:space-between;width:100%;font-size:12px;letter-spacing:.1em;color:#63665b}
+.preview-top strong{color:#171817}
+.device{position:relative;padding:14px;border:2px solid #50514b;border-radius:65px;background:linear-gradient(135deg,#464640,#131411 35%,#252621);box-shadow:0 18px 26px #0002;margin:38px 0 30px}
+.device:after{content:"";position:absolute;right:-10px;top:88px;width:8px;height:39px;border-radius:0 5px 5px 0;background:repeating-linear-gradient(#676963 0 2px,#45463f 2px 4px)}
+.watch{--surface:#1A1B1D;--raised:#2A2B2E;--text:#F2F1EA;--text2:#9D9C94;--volt:#D4FF3A;--amber:#FFB547;--red:#FF6B5B;width:198px;height:242px;zoom:1.5;border-radius:34px;background:#000;color:var(--text);overflow:hidden;font-size:16px;position:relative}
+.watch.small{width:176px;height:215px}
+.watch.large{font-size:20px}
+.watch:focus-visible{outline:2px solid var(--volt)}
+.bar{height:30px;padding:8px 17px 0;display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--text2)}
+.bar span:last-child{color:var(--text)}
+.screen{height:calc(100% - 30px);overflow:auto;padding:0 10px 20px;scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+.screen h2{font-size:1.0625em;line-height:1.35;margin:3px 0 10px;outline:none}
+.stack{display:flex;flex-direction:column;gap:8px}
+.watch button{border:0;min-height:44px;border-radius:25px;background:var(--raised);color:var(--text);padding:9px 8px;font-size:1em;line-height:1.3;font-weight:600;white-space:normal;overflow-wrap:anywhere}
+.watch .primary{background:var(--volt);color:#121212}
+.watch .text{background:none;color:var(--text2)}
+.watch .danger{color:var(--red);background:none}
+.watch .exercise{border:2px solid transparent;border-radius:12px;background:var(--surface);text-align:left;min-height:52px}
+.watch .selected{border-color:var(--volt)}
+.watch small,.meta{display:block;color:var(--text2);font-size:.8125em;line-height:1.5}
+.watch .selected small{color:var(--volt)}
+.chip{font-size:.8125em;line-height:1.45;border-radius:12px;background:var(--raised);padding:5px 9px;overflow-wrap:anywhere}
+.amber{color:var(--amber)}
+.red{color:var(--red)}
+.digit{font-family:"SF Pro Display","Arial Narrow",sans-serif;font-stretch:condensed;font-weight:900;font-variant-numeric:tabular-nums;font-size:88px;letter-spacing:-6px;line-height:1.02;text-align:center;margin:2px 0}
+.digit span{font-family:-apple-system,sans-serif;font-size:14px;letter-spacing:0;margin-left:4px;font-weight:500}
+.counting{color:var(--volt)}
+.uncertain{color:var(--text2)}
+.stepper{display:flex;align-items:center;justify-content:space-between;gap:5px}
+.stepper button{width:38px;min-width:38px;min-height:38px;border-radius:50%;font-size:22px;padding:4px}
+.stepper input{width:76px;min-width:0;color:var(--text);background:transparent;border:1px solid #4c4d48;border-radius:8px;text-align:center;font-size:34px;font-weight:800;font-variant-numeric:tabular-nums;appearance:textfield}
+.stepper input::-webkit-inner-spin-button{appearance:none}
+.card{background:var(--surface);border-radius:12px;padding:10px}
+.card strong{font-size:1.125em}
+.watch .card:has(.summary-number){padding:6px 10px}
+.watch .summary-number{font-size:34px;font-weight:800;line-height:1.2}
+.watch p{font-size:.8125em;line-height:1.55}
+.notes{font-size:13px;color:#66685e;line-height:1.8;max-width:350px;text-align:center}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin:24px 0 16px;justify-content:center}
+.steps span{font-size:12px;padding:5px 9px;border-radius:15px;background:#dadbd1;color:#606257}
+.steps .active{color:#fff;background:#24271f}
+.panel{display:flex;flex-direction:column;gap:16px}
+.panel-head{display:flex;align-items:baseline;justify-content:space-between}
+.panel-head h2{font-size:18px}
+.tag{font-size:11px;letter-spacing:.08em;color:#5d6351}
+.panel section{border:1px solid #c8cbbe;border-radius:18px;background:#F4F3EE;padding:20px}
+.panel h3{font-size:14px;margin:0 0 12px}
+.controls{display:flex;flex-wrap:wrap;gap:8px}
+.panel button,.panel select{border:1px solid #c6c9bc;border-radius:9px;background:#fff;color:#24271e;padding:9px 11px;font-size:13px;min-height:38px}
+.panel button:hover:not(:disabled){background:#e1e7cf}
+.panel label{font-size:13px;display:flex;align-items:center;gap:6px;min-height:32px}
+.panel input{accent-color:#5b7614}
+.row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.hint{font-size:12px;line-height:1.6;color:#606557;margin-top:10px}
+.ledger{font-size:13px;line-height:1.7;max-height:180px;overflow:auto}
+.ledger article{padding:8px 0;border-bottom:1px solid #d8dbcf}
+.ledger b{display:block}
+.log{font:12px/1.7 ui-monospace,monospace;color:#59614d;max-height:90px;overflow:auto}
+.panel output{display:block}
+.footer{font-size:12px;color:#717569}
+.dialog{padding:5px 2px}
+.watch .dialog h2{margin-bottom:12px}
+.watch .dialog p{margin-bottom:15px}
+.watch.large .bar{font-size:13px}
+.watch.large .stepper input{font-size:34px}
+.watch.large .stepper button{font-size:22px}
+.watch .status-copy{min-height:20px}
+.watch button:focus-visible{outline-color:var(--volt)}
+body.shot header,body.shot .panel,body.shot .notes,body.shot .steps,body.shot .preview-top{display:none}
+body.shot{background:#E8E7DF}
+body.shot .workspace{display:block;padding:14px;width:max-content}
+body.shot .device{margin:0}
+body.shot .preview{width:max-content}
+body.shot .device:after{right:-9px}
+@media(max-width:820px){.workspace{grid-template-columns:1fr;gap:26px;padding:24px 18px}
+header{padding:24px}
+.panel{max-width:560px;width:100%;margin:auto}
+.preview-top{max-width:390px}
+}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}
+}
+
+.count-flow{gap:4px}
+.count-flow h2{margin:0}
+.count-flow h2 small{display:inline;font-size:13px;font-weight:400}
+.count-flow .digit{margin:0}
+.count-flow .meta{line-height:1.2}
+
+</style>
+</head>
+<body>
+<header><div class="brand">REPFLOW / INTERACTIVE PROTOTYPE</div><div class="headline"><h1>把注意力留给下一次。</h1><span class="tag">WATCHOS · CHALK & VOLT</span></div><p>选择动作 → 开组计次 → 核对保存 → 组间休息 → 结束训练。右侧只模拟数据与故障，不是手表 App 的功能。</p></header>
+<main class="workspace">
+<div class="preview"><div class="preview-top"><strong>01 / 手表预览</strong><span id="size-caption">45 MM · 1.5×</span></div><div class="device"><div class="watch" id="watch"><div class="bar"><span>RepFlow</span><span>10:09</span></div><div class="screen" id="screen" aria-label="手表屏幕"></div></div></div><div class="steps" id="steps"></div><p class="notes">纯交互演示，无传感器、网络或训练数据上传。<br>动作是示例，不代表自动计次支持名单已冻结。<br>屏幕可滚动，Tab 可依次访问操作。</p></div>
+<aside class="panel" aria-label="演示控制面板">
+<div class="panel-head"><h2>演示控制台</h2><span class="tag">非手表界面</span></div>
+<section><h3>01 · 计次与保存</h3><div class="controls"><button data-action="inject" data-value="1" id="inject1">模拟 +1 次</button><button data-action="inject" data-value="8" id="inject8">模拟 +8 次</button><button data-action="inject" data-value="9" id="inject9">模拟 +9 次</button><button data-action="pause" id="pause">模拟组内停顿</button><button data-action="sensor" id="sensor">模拟采样中断</button><button data-action="localFail">下一次本地写入失败</button></div><div class="row"><label><input id="permission" type="checkbox" checked>所需权限可用</label><label><input id="rest-demo" type="checkbox" checked>展示休息计时（Should）</label></div><p class="hint">手动注入仅演示估计次数。采样中断后停止注入；结束本组后才能核对。休息从结束本组起正计时，仅为评审方案。</p></section>
+<section><h3>02 · 手表到手机交接</h3><div class="row"><label><input id="connected" type="checkbox" checked>手机连接可用</label><label>手机账号<select id="account"><option value="A">账号 A</option><option value="B">账号 B</option><option value="">未登录</option></select></label></div><div class="controls"><button data-action="retry">模拟恢复／补发</button><button data-action="duplicate">重复发送最近一组</button><button data-action="phoneFail">下一次手机写入失败</button><button data-action="ackLost">下一次确认丢失</button><button data-action="transferFail">下一次传输失败</button></div><p class="hint">手机写库成功才确认。未登录不接收；已有训练归原账号。这里的手机记录只模拟「待同步」，不代表后端已同步。</p></section>
+<section><div class="panel-head"><h3>手机已接收 · 当前账号</h3><span id="queue" class="tag"></span></div><div id="ledger" class="ledger" aria-live="polite"></div></section>
+<section><h3>03 · 布局与恢复</h3><div class="row"><label>尺寸<select id="size"><option value="45">45 mm</option><option value="41">41 mm</option></select></label><label><input id="large-text" type="checkbox">放大文字</label></div><div class="controls"><button data-action="restart">模拟退出并重新打开</button><button data-action="reset">重置演示数据</button></div><p class="hint">演示状态只存当前浏览器 localStorage；刷新保留，重置清空。不模拟卸载／换机恢复，不替代原生 VoiceOver 或真机验收。</p></section>
+<section><h3>演示记录</h3><output class="log" id="log" aria-live="polite"></output></section><p class="footer">#10 · REQ-WATCH-001–006 / NFR-201–202<br><a href="README.md">覆盖清单与走查记录 ↗</a></p>
+</aside>
+</main>
+<script>
+'use strict';
+const KEY='repflow-watch-prototype-v1';
+const EXERCISES=[{id:'curl',name:'哑铃弯举',supported:true},{id:'press',name:'哑铃肩推',supported:true},{id:'squat',name:'深蹲',supported:false}];
+const fresh=()=>({page:'choose',selected:null,current:null,workouts:[],active:null,phone:{},connected:true,account:'A',permission:true,restDemo:true,localFail:false,phoneFail:false,ackLost:false,transferFail:false,notice:'',log:[],size:'45',large:false,dialog:null});
+let S=fresh(), transferTimer;
+try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&Array.isArray(saved.workouts)){S={...S,...saved,dialog:null};}}catch{S.notice='演示存储不可用，当前仅保留在页面内存。';}
+const $=id=>document.getElementById(id);
+const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uuid=()=>crypto.randomUUID();
+const workout=()=>S.workouts.find(w=>w.id===S.active);
+const total=w=>w.sets.reduce((sum,s)=>sum+s.final,0);
+const elapsed=at=>{const seconds=Math.max(0,Math.floor((Date.now()-at)/1000));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;};
+function log(message){S.log.unshift(message);S.log=S.log.slice(0,12);}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(S));return true;}catch{S.notice='演示存储写入失败，刷新可能丢失数据；请检查浏览器存储。';return false;}}
+const button=(label,action,style='',disabled=false,value='')=>`<button class="${style}" data-action="${action}" data-value="${value}" ${disabled?'disabled':''}>${label}</button>`;
+const restClock=()=>S.restDemo&&S.restAt?`<p class="meta">已休息 <span data-clock="${S.restAt}">${elapsed(S.restAt)}</span></p>`:'';
+function delivery(w){if(!w||!w.sets.length)return '';const failed=w.sets.some(s=>s.status==='failed')||w.endStatus==='failed';const pending=w.sets.some(s=>s.status!=='received')||(w.ended&&w.endStatus!=='received');return `<div class="chip ${failed?'red':pending?'amber':''}">${failed?'⚠ 传到手机失败':pending?'◷ 待传到手机':'✓ 已传到手机'}</div>${failed?button('↻ 重试','retry'):''}`;}
+function render(){
+ const screen=$('screen'), oldScroll=screen.scrollTop, oldPage=screen.dataset.page,focused=document.activeElement;let html='',w=workout(),c=S.current,e=EXERCISES.find(x=>x.id===S.selected);
+ if(S.dialog){const d=S.dialog;html=`<div class="dialog stack"><h2 tabindex="-1">${d.title}</h2><p>${d.body}</p>${S.notice?`<p class="red" role="status">${esc(S.notice)}</p>`:''}${button(d.cancel||'取消','cancel','primary')}${button(d.confirm,d.action,d.danger?'danger':'')}</div>`;}
+ else if(S.page==='choose')html=`<div class="stack"><h2 tabindex="-1">选择动作</h2>${EXERCISES.map(x=>button(`${x.name}<small>${x.supported?(S.selected===x.id?'✓ 已选择':'自动计次 · 示例'):'仅手动 · 请在手机记录'}</small>`,'select',`exercise ${S.selected===x.id?'selected':''}`,false,x.id)).join('')}${button('▶ 开始本组','start','primary',!e||!e.supported)}${w?button('结束训练','end','text'):''}</div>`;
+ else if(S.page==='count')html=`<div class="stack count-flow"><h2 tabindex="-1">${esc(c.name)}<small> · 第 ${w.sets.length+1} 组</small></h2><p class="meta">估计次数 · <span data-clock="${c.started}">${elapsed(c.started)}</span></p><div class="digit ${c.fault?'uncertain':'counting'}" aria-label="估计次数 ${c.estimate} 次">${c.estimate}${c.fault?'?':''}<span>次</span></div>${c.fault?'<div class="chip amber">⚠ 计次可能不准</div><p>传感器数据中断，结束后请核对</p>':c.paused?'<div class="chip amber">Ⅱ 组内停顿 · 仍为本组</div>':''}${button('■ 结束本组','stop')}${button('结束训练','end','text')}</div>`;
+ else if(S.page==='review')html=`<div class="stack"><h2 tabindex="-1">请核对次数</h2><p class="meta">${esc(c.name)} · 第 ${w.sets.length+1} 组 · 待核对</p><div class="stepper"><button data-action="minus" aria-label="减少 1 次">−</button><input id="candidate" aria-label="最终次数" inputmode="numeric" type="number" min="1" step="1" value="${esc(c.candidate)}"><button data-action="plus" aria-label="增加 1 次">+</button></div><p class="meta" id="candidate-note">次 · 估计 ${c.estimate}${Number(c.candidate)!==c.estimate?' · 已修正':''} · 自动计次</p>${S.notice?`<p class="red" role="status">${esc(S.notice)}</p>`:''}${button('✓ 确认并保存','save','primary')}${restClock()}${button('放弃本组','discard','danger')}${button('结束训练','end','text')}</div>`;
+ else if(S.page==='rest')html=`<div class="stack"><h2 tabindex="-1">${w.sets.length?'✓ 已保存到手表':'本组已放弃'}</h2>${w.sets.length?`<div class="card"><strong>${w.sets.length} 组 · ${total(w)} 次</strong></div>`:''}${delivery(w)}${restClock()}${button(`▶ 开始第 ${w.sets.length+1} 组`,'start','primary')}${button('选择其他动作','choose')}${button('结束训练','end','text')}</div>`;
+ else html=`<div class="stack"><h2 tabindex="-1">训练已结束</h2>${w&&w.sets.length?`<div class="card"><div class="summary-number">${w.sets.length} 组</div><p>动作总次数 ${total(w)}</p></div>${delivery(w)}`:'<p>没有已确认组，本次未生成训练记录。</p>'}${button('开始新的训练','new','primary')}<p class="meta">已确认记录保留，待传记录会继续补发。</p></div>`;
+ if(S.notice&&S.page!=='review'&&!S.dialog)html=`<p class="chip amber" role="status">${esc(S.notice)}</p>`+html;
+ screen.innerHTML=html;screen.dataset.page=S.dialog?'dialog':S.page;screen.scrollTop=oldPage===screen.dataset.page?oldScroll:0;
+ if(oldPage!==screen.dataset.page)screen.querySelector('h2')?.focus({preventScroll:true});
+ else if(focused&&screen.contains(focused)===false){const target=focused.id?document.getElementById(focused.id):focused.dataset?.action?screen.querySelector(`[data-action="${focused.dataset.action}"]`):null;target?.focus({preventScroll:true});}
+ $('watch').classList.toggle('small',S.size==='41');$('watch').classList.toggle('large',S.large);$('size-caption').textContent=`${S.size} MM · 1.5×`;
+ $('steps').innerHTML=[['choose','选动作'],['count','计次'],['review','核对'],['rest','休息'],['summary','结束']].map(([p,n])=>`<span class="${S.page===p?'active':''}">${n}</span>`).join('');
+ for(const [id,key]of [['connected','connected'],['permission','permission'],['rest-demo','restDemo'],['large-text','large']])$(id).checked=S[key];$('account').value=S.account;$('size').value=S.size;
+ for(const id of ['inject1','inject8','inject9','pause','sensor'])$(id).disabled=S.page!=='count'||!!S.current?.fault||!!S.dialog;
+ $('pause').textContent=S.current?.paused?'恢复本组计次':'模拟组内停顿';
+ const pending=S.workouts.reduce((n,w)=>n+w.sets.filter(s=>s.status!=='received').length+(w.ended&&w.endStatus!=='received'?1:0),0);$('queue').textContent=`待交接 ${pending} 项`;
+ const visible=Object.values(S.phone).filter(p=>p.account===S.account&&S.account);
+ $('ledger').innerHTML=!S.account?'手机未登录，暂不接收记录。':visible.length?visible.map(p=>`<article><b>账号 ${p.account} · ${Object.keys(p.sets).length} 组 · ${Object.values(p.sets).reduce((n,s)=>n+s.final,0)} 次</b>${Object.values(p.sets).map(s=>`${esc(s.name)} ${s.final} 次（估计 ${s.estimate}）· 自动计次${s.final!==s.estimate?' · 已修正':''}`).join('、')}<br>已保存到手机 · 待同步${p.ended?' · 训练已结束':''}</article>`).join(''):'还没有训练记录';
+ $('log').innerHTML=S.log.map(esc).join('<br>');persist();
+}
+function schedule(){clearTimeout(transferTimer);transferTimer=setTimeout(deliver,450);}
+function deliver(){
+ if(!S.connected||!S.account){log(S.connected?'手机未登录，不保存、不确认':'两端断连，手表保留待传记录');return render();}
+ for(const w of S.workouts){for(const s of w.sets){if(s.status==='received')continue;
+  if(S.transferFail){S.transferFail=false;s.status='failed';log('传输失败，待传数据保留');return render();}
+  if(S.phoneFail){S.phoneFail=false;log('手机写库失败：不回确认，手表继续待传');return render();}
+  const p=S.phone[w.id]||(S.phone[w.id]={account:S.account,sets:{},ended:false});
+  const existed=!!p.sets[s.id];if(!existed)p.sets[s.id]={...s};
+  if(S.ackLost){S.ackLost=false;s.status='pending';log('手机已保存，确认丢失；重试不会重复插入');return render();}
+  s.status='received';log(`${existed?'重复消息，仅补确认':'手机已保存并确认'} · 归账号 ${p.account}`);
+ }
+ if(w.ended&&w.sets.length&&w.endStatus!=='received'){if(S.phoneFail){S.phoneFail=false;return render();}if(S.transferFail){S.transferFail=false;w.endStatus='failed';return render();}S.phone[w.id].ended=true;if(S.ackLost){S.ackLost=false;log('训练结束确认丢失，结束任务保留');return render();}w.endStatus='received';}}
+ render();
+}
+function confirm(title,body,action,label,danger=true,cancel='取消'){S.dialog={title,body,action,confirm:label,danger,cancel};}
+function finish(){if(S.localFail){S.localFail=false;S.notice='结束状态尚未保存，请重试';return;}const w=workout();if(w){if(w.sets.length){w.ended=Date.now();w.endStatus='pending';}else{S.workouts=S.workouts.filter(x=>x!==w);S.active=null;}}S.page='summary';S.current=null;S.dialog=null;S.notice='';schedule();}
+function action(name,value){const before=JSON.stringify(S);let w=workout(),c=S.current;S.notice='';
+ switch(name){
+ case 'select':S.selected=value;break;
+ case 'choose':S.page='choose';break;
+ case 'start':{if(c||!['choose','rest'].includes(S.page))return;const e=EXERCISES.find(x=>x.id===S.selected);if(!e?.supported)return;if(!S.permission){S.notice='所需权限未开启，请在设置中允许后重试。';break;}if(!w){w={id:uuid(),sets:[],started:Date.now(),ended:null};S.workouts.push(w);S.active=w.id;}S.current={id:uuid(),name:e.name,exercise:e.id,estimate:0,candidate:0,source:'automatic',started:Date.now(),fault:false,paused:false};S.page='count';break;}
+ case 'inject':if(S.page==='count'&&c&&!c.fault&&!c.paused)c.estimate+=Number(value);break;
+ case 'pause':if(S.page==='count'&&c&&!c.fault)c.paused=!c.paused;break;
+ case 'sensor':if(S.page==='count'&&c)c.fault=true;break;
+ case 'stop':if(S.page==='count'&&c){c.candidate=c.estimate;S.restAt=Date.now();S.page='review';S.dialog=null;}break;
+ case 'minus':case 'plus':if(c&&S.page==='review'){const n=Number(c.candidate);c.candidate=(Number.isFinite(n)?n:0)+(name==='plus'?1:-1);}break;
+ case 'save':if(!c||S.page!=='review')return;{const n=Number(c.candidate);if(!Number.isSafeInteger(n)||n<=0){S.notice='请输入有效的整数次数，0 次组不能保存';break;}if(S.localFail){S.localFail=false;S.notice='本组尚未保存，请重试';log('本地写入失败，候选结果保留');break;}if(!w.sets.some(s=>s.id===c.id))w.sets.push({...c,final:n,status:'pending'});S.current=null;S.page='rest';log('已保存到手表，等待手机确认');schedule();break;}
+ case 'discard':if(c)confirm('放弃本组？','本组尚未保存，其他已保存的组不受影响。','discardYes','放弃本组',true,'继续核对');break;
+ case 'discardYes':if(c){S.current=null;S.page='rest';S.dialog=null;}break;
+ case 'end':if(S.page==='count')confirm('先结束本组','请先结束本组并核对，再结束训练。','stop','结束本组并核对',false,'继续本组');else if(c)confirm('本组尚未保存','返回核对，或放弃本组并结束训练。已保存组不受影响。','discardEnd','放弃本组并结束训练',true,'返回核对');else finish();break;
+ case 'discardEnd':finish();break;
+ case 'cancel':S.dialog=null;break;
+ case 'new':S.active=null;S.current=null;S.selected=null;S.restAt=null;S.page='choose';break;
+ case 'retry':schedule();log('已请求补发，等待手机持久化确认');break;
+ case 'duplicate':{const last=S.workouts.flatMap(x=>x.sets).at(-1);if(last){last.status='pending';schedule();log('重复发送最近一组，保留原身份');}break;}
+ case 'localFail':case 'phoneFail':case 'ackLost':case 'transferFail':S[name]=true;log({localFail:'下一次本地写入将失败',phoneFail:'下一次手机写入将失败',ackLost:'下一次手机确认将丢失',transferFail:'下一次传输将失败'}[name]);break;
+ case 'restart':S.dialog=null;log('已模拟重新打开：已保存组和待传任务保留');schedule();break;
+ case 'reset':confirm('重置演示数据？','只清空此浏览器的演示数据，不能撤销。','resetYes','重置演示数据');break;
+ case 'resetYes':clearTimeout(transferTimer);S=fresh();break;
+ }
+ if(['save','end','discardEnd'].includes(name)&&!persist()){S=JSON.parse(before);S.notice='本地写入失败，结果尚未保存，请重试。';}
+ render();
+}
+document.addEventListener('click',event=>{const b=event.target.closest('[data-action]');if(b&&!b.disabled)action(b.dataset.action,b.dataset.value);});
+document.addEventListener('input',event=>{if(event.target.id==='candidate'&&S.current){S.current.candidate=event.target.value;S.notice='';$('candidate-note').textContent=`次 · 估计 ${S.current.estimate}${Number(S.current.candidate)!==S.current.estimate?' · 已修正':''} · 自动计次`;persist();}});
+document.addEventListener('change',event=>{const id=event.target.id;if(id==='candidate'&&S.current){S.current.candidate=event.target.value;return render();}const keys={connected:'connected',permission:'permission','rest-demo':'restDemo','large-text':'large',size:'size',account:'account'};if(!keys[id])return;S[keys[id]]=event.target.type==='checkbox'?event.target.checked:event.target.value;render();if(id==='account'||id==='connected')schedule();});
+setInterval(()=>document.querySelectorAll('[data-clock]').forEach(el=>{el.textContent=elapsed(Number(el.dataset.clock));}),1000);
+if(new URLSearchParams(location.search).has('shot'))document.body.classList.add('shot');
+render();schedule();
+</script>
+</body>
+</html>

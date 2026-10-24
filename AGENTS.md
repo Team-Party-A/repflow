@@ -122,6 +122,7 @@ smoothed = moving_average(samples, window=5)
 | 契约 | 位置 | 状态 |
 | --- | --- | --- |
 | 后端 API | `docs/api/openapi.yaml` | 第 8 周前写好并冻结 |
+| 手表 ↔ 手机消息格式 | `docs/data/02-watch-phone-messages.md` | #34 评审，合入后冻结 |
 | 传感器录制数据格式 | `docs/data/01-sensor-recording-format.md` | 第 8 周冻结 |
 
 客户端按契约实现；后端还没完成时，客户端先连 mock server。

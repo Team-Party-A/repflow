@@ -7,12 +7,19 @@ project_name="repflow-check-$$"
 scratch_dir=$(mktemp -d)
 export POSTGRES_DB=repflow_test POSTGRES_USER=repflow_test
 export POSTGRES_PASSWORD=repflow_test_only HTTP_BIND=127.0.0.1 HTTP_PORT=0
+database_paused=0
 compose() {
     docker compose --env-file /dev/null -p "$project_name" -f "$scratch_dir/compose.yaml" "$@"
 }
 cleanup() {
     check_status=$?
     trap - EXIT HUP INT TERM
+    if [ "$database_paused" -eq 1 ]; then
+        if ! compose unpause db >/dev/null 2>&1; then
+            printf 'failed to unpause temporary database during cleanup\n' >&2
+            check_status=1
+        fi
+    fi
     if [ "$check_status" -ne 0 ]; then compose logs --no-color --tail 50 >&2 || true; fi
     docker rm -f "$project_name-ip-holder" >/dev/null 2>&1 || true
     compose down --volumes --remove-orphans >/dev/null 2>&1 || true
@@ -111,6 +118,22 @@ compose stop db
 expect_health 503 unavailable
 compose up -d --wait --wait-timeout 120 db
 expect_health 200 ok
+
+# 真实暂停已有连接，覆盖驱动等待取消确认导致代理先返回 504 的情况。
+compose pause db
+database_paused=1
+timeout_code=$(curl -sS --max-time 4.5 -o "$scratch_dir/timeout.json" -w '%{http_code}' "$health_url")
+test "$timeout_code" = 503
+python3 - "$scratch_dir/timeout.json" <<'PY'
+import json
+import sys
+with open(sys.argv[1]) as response:
+    assert json.load(response) == {"status": "unavailable"}
+PY
+compose unpause db
+database_paused=0
+expect_health 200 ok
+printf 'Database timeout checks passed: paused database returned 503 within proxy deadline, recovery returned 200.\n'
 
 # 加入临时容器改变地址分配，再断言 API 确实换址，避免 DNS 测试侥幸通过。
 api_id=$(compose ps -q api)
