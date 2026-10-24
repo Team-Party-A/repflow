@@ -1,0 +1,434 @@
+openapi: 3.1.0
+info:
+  title: RepFlow 手机与后端接口
+  version: 0.1.0-draft
+  summary: '#32 评审草案；尚未冻结，不代表业务接口已经实现'
+  description: |
+    依据 docs/requirements/01-ios.md、02-watch.md、03-backend.md、
+    docs/prototype/README.md、docs/adr/0001-backend-stack.md，
+    并与已合入 #51 的 docs/data/02-watch-phone-messages.md 对齐。
+    本稿由 Codex 协助起草，后端负责人已确认讨论方案；仍需客户端共同审查。
+    只约定 HTTP 数据与行为，不设计业务表。统计口径已确认，同步时延留到联调实测。
+
+    【认证与账号】首次注册及登录需联网；成功后签发固定有效 365×24 小时的随机 token，
+    不续期。请求通过 HTTPS 和 Authorization: Bearer 发送，禁止放在 URL 中。
+    数据归属来自已验证会话；上传不接受 user_id。训练 ID 一经绑定账号不可换归属，
+    跨账号写入或删除统一返回 404，不披露他人记录。手机须按稳定 user_id 保存记录和任务；
+    一个新 ID 的真实本地账号归属无法仅靠后端请求推断，客户端不能用 B 的 token 上传 A 的记录。
+    token 存 Keychain，密码不在客户端持久化。密码、token、请求原文不写日志或错误响应。
+    所有响应使用 Cache-Control: no-store；认证与训练接口仅通过 HTTPS 对外提供。
+
+    【本地优先】已登录账号断网时仍可记录、查看、修改；不因断网自动退出。
+    主动退出清 token、停止该账号上传，保留其本地记录和待同步任务。
+    重新登录同一 user_id 后补传；不提供手机下拉恢复、多端编辑合并或 Web 编辑。
+
+    【版本与写入】每条训练由同一部 iPhone 连续维护 revision，从 1 起递增，允许跳号。
+    保存、编辑、增删组、接收新的手表记录或结束信息时，内容与新 revision 一起本地持久化；
+    同一次修改的重试保持同一 ID、revision 和内容，不能把手表消息格式 version 当成 revision；重复消息或 ack 不推进 revision。
+    首次 PUT 可接受任意合法 revision；已有有效记录仅接受更大版本并原子替换全部内容。
+    同版本、同规范化内容返回 200 且不重写；同版本不同内容或更小版本返回 409。
+    比较时忽略对象键顺序，UUID 统一小写，时间比较 UTC 时刻；组数组顺序属于内容。
+    并发请求也必须原子判定版本，失败不得留下部分组或消耗版本。成功表示已经持久化。
+    仅上传真实、已确认且本地保存的组；候选组、模板、传感器录制和回放不得上传。
+    record_kind 只声明数据用途，后端不据此宣称能够识别真实动作。
+
+    【手表消息映射】按 docs/data/02-watch-phone-messages.md 沿用小写 UUIDv4，
+    手机手动记录采用相同 ID 规则，不重新映射手表 ID；组 ID 固定归属一条训练。
+    started_at、ended_at、time_zone 同名同义，使用事件发生时间与训练开始时记录的时区。
+    结束消息总在所有组之后到达：手表收齐清单内所有组的手机业务 ack 后才发送结束，
+    手机无需暂存结束消息等待缺失组；此顺序指手表确认保存的组，不包含手机后来手动增加的组。
+    手机持久化后才 ack；重复组、重复结束或已删除记录的旧补发只确认处理，不覆盖编辑或恢复删除。
+    去重、删除和结束交接标记独立于可编辑记录；已有训练沿用原账号，首次接收绑定当时登录账号。
+    手机映射时添加 record_kind=actual 与本地 revision；手表固定 weight_grams=null，手机可补填。
+    组级时间 set_started_at、set_ended_at 只保存在手机本地，不上传；组顺序通过 sets 数组表达，
+    手表新组按 set_index 确定相对顺序，旧补发不改变手机已编辑的顺序；HTTP 不另传 set_index。
+    exercise_id 来自双端共享字典；具体支持名单由客户端与算法确认，示例不冻结名单。
+
+    【删除】删除使 revision 递增，手机持久化删除任务；即使没有收到过上传成功回执也排队删除。
+    后端对尚不存在的 ID 也接受删除并保留标记，以阻止在途上传。有效记录仍按版本比较执行删除。
+    已删除记录的相同版本 DELETE 重试返回 200；更大版本只推进删除版本，更小版本返回 409。
+    已删除 ID 的合法 PUT 都返回 410，即使 PUT 版本更大也不能恢复；重新记录须用新 ID。
+    删除标记一期不自动过期，不提供恢复入口；正常查询和统计排除它。
+    删除最后一组应改发整次训练 DELETE，不用空 sets 覆盖。账号权限检查先于暴露版本或删除状态。
+
+    【回执与重试】回执只确认 accepted_revision；手机必须同时匹配原 user_id、workout_id
+    和本地当前 revision 才能标为已同步。旧回执不能清掉新修改或另一账号的任务。
+    超时不代表后端未写入；网络错误和 500/503 保留原任务，有限次数退避重试，允许手动重试。
+    401 停用旧 token，重新登录后补传；422 纠正输入；409 停止盲目重试，不自动抬高版本覆盖；
+    410 不恢复同一 ID。重试间隔是客户端联调参数，不构成后台持续运行或时延保证。
+
+    【查询与统计】GET 只读取当前账号已同步且未删除的完整记录，不作为手机恢复协议。
+    按 started_at 降序、workout_id 降序分页，cursor 不透明；筛选条件变更须丢弃旧 cursor。
+    游标只绑定账号、时间筛选和上次排序位置，不提供跨页快照；持续写入时可刷新从首页重取。
+    统计必须取齐目标范围，不把单页当全量；动作筛选后只汇总命中动作的组。
+    训练次数按至少有一组命中的训练去重，组数与动作总次数据有效组和 final_rep_count 计算。
+    时间筛选按训练开始时刻，左闭右开；统计按手机当前时区，周一起算，统计本周／本月。
+    本周从当地周一 00:00 至下周一 00:00，本月从当地月初 00:00 至下月初 00:00，
+    先确定日历边界再换算 UTC；不采用滚动近 7／30 天，也不用记录的发生地 time_zone 决定统计范围。
+    手机当前时区变化后按新时区重算；跨端比较使用相同统计时区和范围，HTTP 只传 UTC 边界。
+    原型近 7／30 天展示需在客户端实现时对齐本口径，本 PR 不修改客户端原型。
+
+    【同步时延】REQ-NFR-003 的 X/Y/Z 留到最低支持版本配对真机联调实测，
+    记录设备、系统版本、网络及前后台条件后共同评审，不把未测数值作为验收承诺。
+  x-contract-status: draft
+  x-client-decisions:
+    - id: CLIENT-STATS
+      status: 已确认
+      owners: [wenshare71, shooterli, hulaoyagg]
+      description: 按手机当前时区、周一起算、统计本周／本月；客户端换算 UTC 查询边界。
+    - id: CLIENT-LATENCY
+      status: 联调实测
+      owners: [wenshare71, whj-thu, hulaoyagg]
+      description: REQ-NFR-003 的 X/Y/Z 在最低支持版本配对真机联调中测量并共同评审，不预填承诺。
+servers:
+  - url: /api/v1
+    description: 相对 API 前缀；部署地址通过不入库配置注入，实际连接必须使用 HTTPS
+security:
+  - bearerAuth: []
+tags:
+  - {name: 账号, description: 注册、登录和当前会话注销}
+  - {name: 训练, description: 手机单向上传、删除和只读查询}
+paths:
+  /auth/register:
+    post:
+      tags: [账号]
+      operationId: register
+      summary: 注册并直接进入已登录状态
+      description: 用户名只允许 ASCII 字母、数字、下划线，服务端转小写判重，不自动去空格。密码按 Unicode 码点计长，不截断、不去空格、不限制字符种类。
+      x-requirements: [REQ-IOS-001, REQ-BE-001]
+      security: []
+      requestBody: {$ref: '#/components/requestBodies/Credentials'}
+      responses:
+        '201': {$ref: '#/components/responses/Authenticated'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409': {$ref: '#/components/responses/UsernameTaken'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /auth/login:
+    post:
+      tags: [账号]
+      operationId: login
+      summary: 登录并获得新的独立会话
+      description: 用户名转小写查找；用户名不存在和密码错误均返回相同 401。每次登录签发新 token，不撤销其他会话，稳定 user_id 不因重新登录改变。
+      x-requirements: [REQ-IOS-001, REQ-IOS-002, REQ-BE-001, REQ-BE-003]
+      security: []
+      requestBody: {$ref: '#/components/requestBodies/Credentials'}
+      responses:
+        '200': {$ref: '#/components/responses/Authenticated'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/InvalidCredentials'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /auth/logout:
+    post:
+      tags: [账号]
+      operationId: logout
+      summary: 撤销当前登录凭证
+      description: |
+        服务端提交撤销后才返回 204；此后旧 token 的新鉴权请求返回 401，其他会话保持有效。
+        相同 token 重试注销也会因已撤销而返回 401，客户端仍完成本地退出。
+        离线或请求失败也允许本地退出，不保留旧 token 补发撤销；旧凭证可能有效至原到期日。
+        无论在线或离线退出，手机保留原账号记录，有待上传时先沿用 iOS 的确认提示。
+      x-requirements: [REQ-IOS-002, REQ-BE-002]
+      responses:
+        '204': {description: 当前会话已撤销，无响应正文}
+        '401': {$ref: '#/components/responses/AuthRequired'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /workouts:
+    get:
+      tags: [训练]
+      operationId: listWorkouts
+      summary: 分页查询当前账号已同步的有效训练
+      description: 默认每页 50 条，最多 100 条。时间边界仅按 started_at 过滤，游标不接受其他账号或不同筛选条件；非法游标返回 422。空结果为 200 且 items 为空，不等同于查询失败。
+      x-requirements: [REQ-BE-008, REQ-WEB-001, REQ-WEB-002, REQ-WEB-003]
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+        - {name: cursor, in: query, description: 上一页 next_cursor，首屏不传, schema: {type: string, minLength: 1, maxLength: 2048}}
+        - {name: started_from, in: query, description: 包含此开始时刻；与 started_before 同传时必须更早, schema: {$ref: '#/components/schemas/UtcTime'}}
+        - {name: started_before, in: query, description: 不包含此开始时刻, schema: {$ref: '#/components/schemas/UtcTime'}}
+      responses:
+        '200':
+          description: 当前页；next_cursor 为 null 表示本轮已到末页
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, next_cursor]
+                properties:
+                  items: {type: array, maxItems: 100, items: {$ref: '#/components/schemas/Workout'}}
+                  next_cursor: {type: [string, 'null'], minLength: 1, maxLength: 2048}
+              examples:
+                empty: {summary: 暂无已同步记录, value: {items: [], next_cursor: null}}
+        '401': {$ref: '#/components/responses/AuthRequired'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /workouts/{workout_id}:
+    parameters:
+      - {name: workout_id, in: path, required: true, description: 手表或手机创建后不变的训练 UUID, schema: {$ref: '#/components/schemas/ClientId'}}
+    put:
+      tags: [训练]
+      operationId: putWorkout
+      summary: 创建或完整覆盖一条训练
+      description: |
+        同一请求中的所有组一次生效，不部分成功；请求不包含的原有组被移除。
+        规范化内容包含全部 WorkoutInput 字段；同版本重试必须保持相同组顺序和数据。
+        跨字段校验：set_id 在本次训练中唯一，ended_at 非空时不早于 started_at，
+        time_zone 是有效 IANA 时区，exercise_id 来自最终共享字典。上述非法输入返回 422。
+        set_id 已属于同账号其他训练返回 409；属于其他账号统一返回 404，不披露组归属。
+        已有删除标记返回 410；重建记录必须换 ID。
+      x-requirements: [REQ-IOS-003, REQ-IOS-004, REQ-IOS-006, REQ-IOS-011, REQ-BE-003, REQ-BE-004, REQ-BE-005, REQ-BE-007, REQ-NFR-302]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WorkoutInput'}
+            examples:
+              corrected: {$ref: '#/components/examples/ConfirmedWorkout'}
+      responses:
+        '200': {$ref: '#/components/responses/Stored'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/AuthRequired'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '410': {$ref: '#/components/responses/Deleted'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      tags: [训练]
+      operationId: deleteWorkout
+      summary: 删除训练并阻止在途上传恢复它
+      description: revision 放查询参数，不发送 DELETE 正文；响应只在删除标记持久化后返回。未知 ID 也创建删除标记，其他账号已有 ID 返回 404。删除任务与归属须在手机本地保留到对应版本获确认。
+      x-requirements: [REQ-IOS-007, REQ-IOS-011, REQ-BE-003, REQ-BE-006, REQ-BE-007, REQ-NFR-302]
+      parameters:
+        - {name: revision, in: query, required: true, description: 本次删除的训练版本，重试保持不变, schema: {$ref: '#/components/schemas/Revision'}}
+      responses:
+        '200': {$ref: '#/components/responses/Removed'}
+        '401': {$ref: '#/components/responses/AuthRequired'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, description: 256 位随机量生成的不透明 token；不是 JWT，不解析其中账号信息}
+  schemas:
+    ClientId:
+      type: string
+      format: uuid
+      pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+      description: UUIDv4，跨端沿用原 ID，手机手动记录同规则；服务端统一输出小写
+    Revision:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 2147483647
+      description: 手机持久化的训练内容版本，不是设备时间或消息格式版本；不使用浮点或字符串
+    UtcTime:
+      type: string
+      format: date-time
+      pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$'
+      description: RFC 3339 UTC 时间，以 Z 结尾，至多微秒精度；日期和时分秒还须合法
+    Credentials:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: {type: string, minLength: 3, maxLength: 32, pattern: '^[A-Za-z0-9_]+$', description: ASCII 字母不区分大小写，响应统一小写，不去空格}
+        password: {type: string, minLength: 15, maxLength: 128, writeOnly: true, description: 按 Unicode 码点计长，原样验证，不去空格或截断}
+    AuthResult:
+      type: object
+      additionalProperties: false
+      required: [user_id, username, access_token, token_type, expires_at]
+      properties:
+        user_id: {type: string, format: uuid, description: 后端生成的稳定账号标识，重新登录不改变}
+        username: {type: string, minLength: 3, maxLength: 32, pattern: '^[a-z0-9_]+$'}
+        access_token: {type: string, minLength: 1, description: 仅本次响应交付给客户端的原始凭证，示例不具权限}
+        token_type: {type: string, const: Bearer}
+        expires_at: {$ref: '#/components/schemas/UtcTime'}
+    WorkoutFields:
+      type: object
+      description: 真实训练的完整可写内容；这里只定义接口字段，不对应业务表设计
+      required: [revision, record_kind, started_at, ended_at, time_zone, sets]
+      properties:
+        revision: {$ref: '#/components/schemas/Revision'}
+        record_kind: {type: string, const: actual, description: 仅真实已确认训练；不接收 template 或 replay}
+        started_at: {$ref: '#/components/schemas/UtcTime'}
+        ended_at:
+          description: 未结束、手表尚未完成结束交接或无法确定结束时刻时为 null，不用接收时间伪造；非空时须不早于开始
+          anyOf: [{$ref: '#/components/schemas/UtcTime'}, {type: 'null'}]
+        time_zone: {type: string, minLength: 1, maxLength: 64, description: 训练开始时记录的 IANA 时区，如 Asia/Shanghai，不能用补发接收地覆盖；不决定统计查看时区}
+        sets: {type: array, minItems: 1, maxItems: 1000, description: 仅含真实已确认组；set_id 唯一，数组顺序有意义, items: {$ref: '#/components/schemas/WorkoutSet'}}
+    WorkoutInput:
+      allOf: [{$ref: '#/components/schemas/WorkoutFields'}]
+      unevaluatedProperties: false
+    Workout:
+      allOf:
+        - {$ref: '#/components/schemas/WorkoutFields'}
+        - type: object
+          required: [workout_id]
+          properties:
+            workout_id: {$ref: '#/components/schemas/ClientId'}
+      unevaluatedProperties: false
+    WorkoutSet:
+      type: object
+      additionalProperties: false
+      required: [set_id, exercise_id, final_rep_count, estimated_rep_count, record_source, weight_grams]
+      properties:
+        set_id: {$ref: '#/components/schemas/ClientId'}
+        exercise_id: {type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_]*$', description: 稳定动作键而非显示名称，来自双端共享字典；具体支持名单及动作重量含义由客户端与算法确认}
+        final_rep_count: {type: integer, minimum: 1, maximum: 9999, description: 用户最终确认值，历史和统计采用此值}
+        estimated_rep_count: {type: [integer, 'null'], minimum: 0, maximum: 2147483647, description: 自动计次原估计；手动为 null，不能用最终次数回填伪造}
+        record_source: {type: string, enum: [automatic, manual], description: 自动计次经过人工修正仍是 automatic}
+        weight_grams: {type: [integer, 'null'], minimum: 0, maximum: 1000000, description: 界面 kg，接口整数克，精度 1 克，上限 1000 kg；null 为未填写，0 是明确填写零}
+      allOf:
+        - if: {properties: {record_source: {const: manual}}}
+          then: {properties: {estimated_rep_count: {type: 'null'}}}
+          else: {properties: {estimated_rep_count: {type: integer}}}
+    WriteReceipt:
+      type: object
+      additionalProperties: false
+      required: [workout_id, accepted_revision, deleted]
+      properties:
+        workout_id: {$ref: '#/components/schemas/ClientId'}
+        accepted_revision: {$ref: '#/components/schemas/Revision'}
+        deleted: {type: boolean}
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, fields]
+          properties:
+            code:
+              type: string
+              enum: [INVALID_REQUEST, INVALID_CREDENTIALS, AUTH_REQUIRED, USERNAME_TAKEN, NOT_FOUND, VALIDATION_ERROR, REVISION_CONFLICT, SET_ID_CONFLICT, WORKOUT_DELETED, INTERNAL_ERROR, SERVICE_UNAVAILABLE]
+            message: {type: string, minLength: 1, description: 可读中文说明，不包含凭证、连接串或请求原文；客户端按 code 分支}
+            current_revision: {$ref: '#/components/schemas/Revision', description: 仅版本冲突时提供后端当前版本，权限检查后才披露}
+            fields:
+              type: array
+              description: 无字段错误时为空；path 用 JSON Pointer，整体请求或查询参数用空字符串并由 message 说明
+              items:
+                type: object
+                additionalProperties: false
+                required: [path, message]
+                properties:
+                  path: {type: string, pattern: '^(/([^~/]|~[01])*)*$'}
+                  message: {type: string, minLength: 1}
+  requestBodies:
+    Credentials:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Credentials'}
+          example: {username: demo_user, password: 'example passphrase 2026'}
+  responses:
+    Authenticated:
+      description: 已登录；expires_at 为本次签发时刻加固定 365×24 小时
+      headers:
+        Cache-Control: {schema: {type: string, const: no-store}, description: 凭据响应不得缓存}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/AuthResult'}
+          example: {user_id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa, username: demo_user, access_token: example-token-not-valid, token_type: Bearer, expires_at: '2027-10-24T10:00:00Z'}
+    Stored:
+      description: 新增、更新或同版本同内容重试已确认；全部内容已持久化
+      content:
+        application/json:
+          schema: {allOf: [{$ref: '#/components/schemas/WriteReceipt'}, {properties: {deleted: {const: false}}}]}
+          example: {workout_id: 11111111-1111-4111-8111-111111111111, accepted_revision: 2, deleted: false}
+    Removed:
+      description: 对应版本的删除标记已持久化；允许重复确认
+      content:
+        application/json:
+          schema: {allOf: [{$ref: '#/components/schemas/WriteReceipt'}, {properties: {deleted: {const: true}}}]}
+          example: {workout_id: 11111111-1111-4111-8111-111111111111, accepted_revision: 3, deleted: true}
+    BadRequest:
+      description: INVALID_REQUEST；JSON 无法解析或请求结构损坏，不自动重试原请求
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: INVALID_REQUEST, message: 请求格式错误, fields: []}}
+    AuthRequired:
+      description: AUTH_REQUIRED；缺失、无效、撤销或过期的 token。停止旧凭证重试，保留本地记录；注销场景可直接完成本地退出
+      headers:
+        WWW-Authenticate: {schema: {type: string, const: Bearer}, description: 受保护请求的 401 必须携带此头}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: AUTH_REQUIRED, message: 请重新登录, fields: []}}
+    InvalidCredentials:
+      description: INVALID_CREDENTIALS；不区分用户名不存在或密码错误，留在登录页纠正输入
+      headers:
+        WWW-Authenticate: {schema: {type: string, const: Bearer}, description: 401 认证质询}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: INVALID_CREDENTIALS, message: 用户名或密码错误, fields: []}}
+    UsernameTaken:
+      description: USERNAME_TAKEN；规范化后的用户名已被占用
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: USERNAME_TAKEN, message: 用户名已被使用, fields: []}}
+    NotFound:
+      description: NOT_FOUND；资源不存在或属于其他账号，不披露归属及内容
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: NOT_FOUND, message: 训练不存在或无权访问, fields: []}}
+    Conflict:
+      description: REVISION_CONFLICT 表示版本更旧或同版本内容不同，提供 current_revision；SET_ID_CONFLICT 表示组 ID 属于其他训练。不得盲目加版本重试覆盖
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          examples:
+            revision: {value: {error: {code: REVISION_CONFLICT, message: 训练版本冲突，请核对本地待同步记录, current_revision: 3, fields: []}}}
+            setId: {value: {error: {code: SET_ID_CONFLICT, message: 组 ID 已属于其他训练, fields: []}}}
+    Deleted:
+      description: WORKOUT_DELETED；该 ID 已删除，不因更大 revision 恢复
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: WORKOUT_DELETED, message: 训练已删除，不能重新上传此 ID, fields: []}}
+    ValidationError:
+      description: VALIDATION_ERROR；纠正输入后重试，若修改训练内容则推进 revision；不自动重试原非法内容，错误不回显输入值
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: VALIDATION_ERROR, message: 训练数据不合法, fields: [{path: /sets/0/final_rep_count, message: 次数必须为 1 至 9999 的整数}]}}
+    InternalError:
+      description: INTERNAL_ERROR；未确认成功，保留原任务并有限次数退避重试
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: INTERNAL_ERROR, message: 服务暂时无法完成请求，请稍后重试, fields: []}}
+    Unavailable:
+      description: SERVICE_UNAVAILABLE；数据库等暂不可用，保留原任务并有限次数退避重试
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: SERVICE_UNAVAILABLE, message: 服务暂不可用，请稍后重试, fields: []}}
+  examples:
+    ConfirmedWorkout:
+      summary: 2 个动作、3 组、30 次；自动估计 9 修正为 10，重量 null 与 0 分开
+      description: 合成示例，非真实训练或已冻结动作清单；请求路径使用固定示例训练 UUID
+      value:
+        revision: 2
+        record_kind: actual
+        started_at: '2026-10-24T10:00:00Z'
+        ended_at: '2026-10-24T10:42:00Z'
+        time_zone: Asia/Shanghai
+        sets:
+          - {set_id: 22222222-2222-4222-8222-222222222222, exercise_id: dumbbell_curl, final_rep_count: 8, estimated_rep_count: 8, record_source: automatic, weight_grams: 10000}
+          - {set_id: 33333333-3333-4333-8333-333333333333, exercise_id: dumbbell_curl, final_rep_count: 10, estimated_rep_count: 9, record_source: automatic, weight_grams: null}
+          - {set_id: 44444444-4444-4444-8444-444444444444, exercise_id: dumbbell_shoulder_press, final_rep_count: 12, estimated_rep_count: null, record_source: manual, weight_grams: 0}
