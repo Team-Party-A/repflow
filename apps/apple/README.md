@@ -72,6 +72,23 @@ App Store 只提供最新版。旧版要到 <https://developer.apple.com/downloa
 4. 顶部选 scheme `RepFlow`，运行目标选你的 iPhone，点 Run。手表 App 打包在 iOS App 里：装好后在 iPhone 的 Watch App →「可用的 App」里安装 RepFlow。也可以选 scheme `RepFlowWatch`、运行目标选手表，直接 Run。
 5. 第一次打开时，iPhone 会提示「不受信任的开发者」。到「设置 → 通用 → VPN 与设备管理」里信任你的 Apple ID。
 
+### 手表连不上或装不上时
+
+- DeviceHub 里看不到手表，或者显示 Currently Unavailable：打开 Mac 的蓝牙，让 Mac、iPhone、手表连同一个 Wi‑Fi。校园网会隔离设备，连不上就让 iPhone 开热点，Mac 和手表都连这个热点。手表要解锁并放在旁边。手表被 Xcode 认到之后，「设置 → 隐私与安全性」里才会出现开发者模式。
+- Xcode 显示构建成功，手表上却没有 App；或者经 iPhone 的 Watch App 安装时一直失败：改用命令行直接装到手表。在 `apps/apple/` 下运行：
+
+  ```bash
+  # 查手表的 UDID（Reality 一列为 physical 的 Apple Watch）
+  xcrun devicectl list devices
+
+  xcodebuild build -scheme RepFlowWatch -destination 'generic/platform=watchOS' -derivedDataPath build -allowProvisioningUpdates
+  xcrun devicectl device install app --device <手表 UDID> build/Build/Products/Debug-watchos/RepFlowWatch.app
+  # 启动前先解锁手表，否则报 Locked；也可以直接在手表的 App 列表里点开
+  xcrun devicectl device process launch --device <手表 UDID> io.github.teampartya.repflow.<你的后缀>.watchkitapp
+  ```
+
+  `build/` 已在 `.gitignore` 里。工程暂时没有图标，RepFlow 在手表上显示为空白图标。
+
 免费账号签的包 7 天后过期，过期了重新 Run 一次就行。免费账号还有两个限制：一台设备上最多同时装 3 个自签名 App，每 7 天最多注册 10 个 Bundle ID。
 
 ## 命令行
