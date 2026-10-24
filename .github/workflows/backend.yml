@@ -1,0 +1,182 @@
+name: Backend
+
+on:
+  pull_request:
+    paths: ["backend/**", "deploy/**", ".github/workflows/backend.yml"]
+  push:
+    branches: [dev, main]
+    paths: ["backend/**", "deploy/**", ".github/workflows/backend.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      API_IMAGE: repflow-api:ci
+      TEST_IMAGE: repflow-tests:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned and verified CLI plugins
+        run: sh deploy/install-ci-tools.sh
+      - name: Record Docker environment
+        run: docker version
+      - name: Test registry visibility guard
+        run: python3 -m unittest discover -s deploy -p 'test_*.py' -v
+      - name: Build test and runtime images
+        run: |
+          docker build --target test -t "$TEST_IMAGE" backend
+          docker build --target runtime -t "$API_IMAGE" backend
+      - name: Check formatting, tests, coverage and Compose recovery
+        run: sh deploy/check.sh
+      - name: Check pinned mirror sources without publishing
+        env:
+          IMAGE_ARCH: ${{ matrix.arch }}
+        run: |
+          python3 deploy/mirror_images.py
+          placeholder_digest=sha256:0000000000000000000000000000000000000000000000000000000000000000
+          API_IMAGE=repflow-api:ci POSTGRES_PASSWORD=ci-config-only \
+            NGINX_IMAGE="ghcr.io/team-party-a/repflow-nginx@$placeholder_digest" \
+            POSTGRES_IMAGE="ghcr.io/team-party-a/repflow-postgres@$placeholder_digest" \
+            docker compose --env-file /dev/null -f deploy/compose.yaml -f deploy/compose.ghcr.yaml config --quiet
+
+  publish:
+    if: github.event_name == 'push'
+    needs: checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sh deploy/install-ci-tools.sh
+      - name: Require a private package or first publication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 deploy/registry_guard.py --allow-missing
+      - name: Authenticate to GHCR with the job token
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Publish the checked commit for this native architecture
+        env:
+          IMAGE_ARCH: ${{ matrix.arch }}
+        run: |
+          docker buildx build --platform "linux/$IMAGE_ARCH" --target runtime \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            -t "ghcr.io/team-party-a/repflow-api:sha-$GITHUB_SHA-$IMAGE_ARCH" --push backend
+      - name: Verify the published package is private
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 deploy/registry_guard.py
+
+  manifest:
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sh deploy/install-ci-tools.sh
+      - name: Require a private package before publishing the index
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 deploy/registry_guard.py
+      - name: Authenticate to GHCR with the job token
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Publish multi-architecture index and deployment digest
+        run: |
+          image="ghcr.io/team-party-a/repflow-api:sha-$GITHUB_SHA"
+          docker buildx imagetools create -t "$image" "$image-amd64" "$image-arm64"
+          docker buildx imagetools inspect "$image" --format '{{json .Manifest}}' > "$RUNNER_TEMP/manifest.json"
+          digest=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$RUNNER_TEMP/manifest.json")
+          printf 'API_IMAGE=ghcr.io/team-party-a/repflow-api@%s\n' "$digest" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Commit: %s. Deployment requires a manual update.\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+  mirror:
+    name: Backup mirror (${{ matrix.arch }})
+    if: github.event_name == 'push'
+    needs: checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sh deploy/install-ci-tools.sh
+      - name: Authenticate to GHCR with the job token
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Copy official pinned images and verify native content
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_ARCH: ${{ matrix.arch }}
+        run: python3 deploy/mirror_images.py --publish
+
+  mirror_manifest:
+    name: Backup mirror index
+    needs: mirror
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sh deploy/install-ci-tools.sh
+      - name: Authenticate to GHCR with the job token
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Publish verified backup indexes and deployment digests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 deploy/mirror_images.py --manifest

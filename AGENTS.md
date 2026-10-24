@@ -26,10 +26,10 @@ RepFlow 是一个用 Apple Watch 自动计次的健身记录 App：开组前选�
 | 模块 | 技术栈 | 构建 | 测试 | 格式化 / lint |
 | --- | --- | --- | --- | --- |
 | watch、ios | SwiftUI（iOS + watchOS）；部署目标 iOS 17.2、watchOS 10.0；Xcode 27.1 | 在 `apps/apple/` 下：`xcodebuild build -scheme RepFlow -destination 'generic/platform=iOS Simulator'`（连同手表 App 一起构建） | `xcodebuild test -scheme RepFlow -destination 'platform=iOS Simulator,name=iPhone 17'`；`xcodebuild test -scheme RepFlowWatch -destination 'platform=watchOS Simulator,name=Apple Watch SE 3 (40mm)'`（XCTest） | `xcrun swift-format`（Xcode 自带，配置见 `apps/apple/.swift-format`） |
-| backend | FastAPI + PostgreSQL | 待定 | `pytest --cov` | `ruff format`、`ruff check` |
+| backend | FastAPI + PostgreSQL | `docker build --target runtime -t repflow-api:local backend`（仓库根目录） | `uv run --locked pytest --cov=app`（backend 内，需测试库） | `uv run --locked ruff format`、`uv run --locked ruff check` |
 | ml | Python | — | `pytest` | `ruff format`、`ruff check` |
 | web | 待定 | 待定 | Cypress | ESLint + Prettier |
-| deploy | docker compose + nginx | `docker compose build` | 健康检查（待定） | — |
+| deploy | docker compose + nginx | Backend CI 构建并发布镜像 | `API_IMAGE=… TEST_IMAGE=… sh deploy/check.sh`（仓库根目录） | — |
 
 系统支持范围：工程的 Deployment Target 为 iOS 17.2、watchOS 10.0（Xcode 只能填到次版本号）；兼容验证基线为 iOS 17.2.1、watchOS 10.0 真机，最低版本验收在基线真机上做。
 
@@ -170,9 +170,10 @@ smoothed = moving_average(samples, window=5)
 
 | 模块 | 检查命令 |
 | --- | --- |
-| backend、ml | `ruff format --check . && ruff check . && pytest` |
+| backend | `uv run --locked ruff format --check . && uv run --locked ruff check . && uv run --locked pytest --cov=app`（uv 0.13.5，需测试库；完整容器命令见 [部署说明](docs/deployment.md)） |
+| ml | `ruff format --check . && ruff check . && pytest` |
 | watch、ios | 在 `apps/apple/` 下：`xcrun swift-format lint --strict --recursive .` + 第 2 节的两条 `xcodebuild test` |
 | web | ESLint + Prettier 检查 + 构建（命令待定） |
-| deploy | `docker compose config` |
+| deploy | `docker compose config --quiet`（指定配置和环境变量，见 [部署说明](docs/deployment.md)）及 `sh deploy/check.sh` |
 
 任何一项失败都不能交付；不能为了通过检查而删除或跳过测试。
