@@ -15,7 +15,7 @@ API_IMAGE=repflow-api:local TEST_IMAGE=repflow-tests:local sh deploy/check.sh
 python3 -m unittest discover -s deploy -p 'test_*.py' -v
 ```
 
-check.sh 创建独立临时 Compose 项目、内部测试库和假密码，执行 ruff、pytest、覆盖率、真实数据库连接、故障恢复、API 更换 IP、数据卷保留检查，退出时删除该临时项目及其卷。它显式隔离部署用 `.env`，不针对现有部署运行。
+check.sh 创建独立临时 Compose 项目、内部测试库和假密码，执行 ruff、pytest、覆盖率、真实数据库连接、故障恢复、API 更换 IP、数据卷保留检查。配置测试只修改临时 nginx 副本：拒绝非法候选配置、重建后观察新增响应头、回退重建后确认响应头消失。退出时删除该临时项目及其卷。它显式隔离部署用 `.env`，不针对现有部署运行。
 
 CI 用 Ubuntu 24.04 两种原生架构执行相同检查；`install-ci-tools.sh` 只用于可丢弃 CI runner，从官方发布资产安装固定插件并核验 SHA-256。
 
@@ -64,14 +64,20 @@ chmod 600 deploy/.env
 set -eu
 docker compose --env-file deploy/.env -f deploy/compose.yaml config --quiet
 docker compose --env-file deploy/.env -f deploy/compose.yaml pull
-docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --wait --wait-timeout 120
+docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm --no-deps nginx nginx -t
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --wait --wait-timeout 120 db api
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --no-deps --force-recreate --wait --wait-timeout 120 nginx
 curl --fail --silent --show-error http://127.0.0.1:8080/health
 docker compose --env-file deploy/.env -f deploy/compose.yaml logs --tail 100 api nginx db
 ```
 
 配置检查使用 `--quiet`，避免将展开后的密码输出到终端或日志。正常健康检查返回 `200 {"status":"ok"}`；数据库失败或超时返回 `503 {"status":"unavailable"}`，响应不缓存。nginx 仅转发 `/health`。
 
-更新时先获取已发布提交及相配配置，再更新 `.env` 中的 API_IMAGE 为新摘要，重复配置检查、pull 和 up。PostgreSQL 18 数据卷挂载 `/var/lib/postgresql`，跨容器保留；删除卷会丢失集群。回退使用上次已验证的提交、配置及 API_IMAGE，保留数据库卷与当前数据库密码。数据库引擎升级另行安排，业务表迁移不能代替引擎升级。
+首次启动、更新及回退都执行上面的完整顺序。`config --quiet` 只检查 Compose；`run --rm --no-deps nginx nginx -t` 用新临时容器挂载磁盘上的候选配置，校验语法及引用文件，不占用现有入口端口。任何检查失败都停止，不执行后续 up。不要只用现有容器内的 `nginx -t` 检查候选文件：单文件 bind mount 可能仍指向被替换前的旧文件。
+
+更新时先获取已发布提交及相配配置，再更新 `.env` 中的 API_IMAGE 为新摘要，执行上述顺序。回退时先恢复上次已验证提交的 Compose、nginx 配置和镜像摘要，再执行相同顺序。无论镜像或服务定义有没有变化，都显式重建 nginx，使它重新挂载并读取当前文件；入口会短暂中断。只 pull/up 或看到 `/health` 返回 200，不能证明新代理配置已加载。依据 [Compose 重建参数](https://docs.docker.com/reference/cli/docker/compose/up/)及 [nginx 配置检查说明](https://nginx.org/en/docs/switches.html)。
+
+PostgreSQL 18 数据卷挂载 `/var/lib/postgresql`，跨容器保留；更新及回退保留数据库卷与当前数据库密码，删除卷会丢失集群。数据库引擎升级另行安排，业务表迁移不能代替引擎升级。
 
 负责人在服务器私有目录 `$HOME/.local/state/repflow/` 维护部署记录，目录权限 700，记录不含密码或 PAT。每次验收成功后更新以下两行；配置版本需能找到对应的 Compose、nginx 配置和人工维护的环境配置版本，回退前核对数据库密码仍匹配原卷。
 
@@ -88,7 +94,9 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml logs --tail 100 api
 set -eu
 docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.ghcr.yaml config --quiet
 docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.ghcr.yaml pull
-docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.ghcr.yaml up -d --wait --wait-timeout 120
+docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.ghcr.yaml run --rm --no-deps nginx nginx -t
+docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.ghcr.yaml up -d --wait --wait-timeout 120 db api
+docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.ghcr.yaml up -d --no-deps --force-recreate --wait --wait-timeout 120 nginx
 curl --fail --silent --show-error http://127.0.0.1:8080/health
 ```
 
