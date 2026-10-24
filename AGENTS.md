@@ -25,7 +25,7 @@ RepFlow 是一个用 Apple Watch 自动计次的健身记录 App：开组前选�
 
 | 模块 | 技术栈 | 构建 | 测试 | 格式化 / lint |
 | --- | --- | --- | --- | --- |
-| watch、ios | SwiftUI（iOS + watchOS）；部署目标 iOS 17.2、watchOS 10.0 | `xcodebuild build`（scheme 待定） | `xcodebuild test`（XCTest、XCUITest） | SwiftFormat 或 SwiftLint（二选一，待定） |
+| watch、ios | SwiftUI（iOS + watchOS）；部署目标 iOS 17.2、watchOS 10.0；Xcode 27.1 | 在 `apps/apple/` 下：`xcodebuild build -scheme RepFlow -destination 'generic/platform=iOS Simulator'`（连同手表 App 一起构建） | `xcodebuild test -scheme RepFlow -destination 'platform=iOS Simulator,name=iPhone 17'`；`xcodebuild test -scheme RepFlowWatch -destination 'platform=watchOS Simulator,name=Apple Watch SE 3 (40mm)'`（XCTest） | `xcrun swift-format`（Xcode 自带，配置见 `apps/apple/.swift-format`） |
 | backend | FastAPI + PostgreSQL | 待定 | `pytest --cov` | `ruff format`、`ruff check` |
 | ml | Python | — | `pytest` | `ruff format`、`ruff check` |
 | web | 待定 | 待定 | Cypress | ESLint + Prettier |
@@ -171,7 +171,7 @@ smoothed = moving_average(samples, window=5)
 | 模块 | 检查命令 |
 | --- | --- |
 | backend、ml | `ruff format --check . && ruff check . && pytest` |
-| watch、ios | SwiftFormat / SwiftLint 检查（待定） + `xcodebuild test`（scheme 与 destination 待定） |
+| watch、ios | 在 `apps/apple/` 下：`xcrun swift-format lint --strict --recursive .` + 第 2 节的两条 `xcodebuild test` |
 | web | ESLint + Prettier 检查 + 构建（命令待定） |
 | deploy | `docker compose config` |
 

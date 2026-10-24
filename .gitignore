@@ -3,6 +3,7 @@ DerivedData/
 xcuserdata/
 *.xcuserstate
 build/
+Local.xcconfig
 
 # Python
 __pycache__/
