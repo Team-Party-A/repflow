@@ -15,7 +15,7 @@ API_IMAGE=repflow-api:local TEST_IMAGE=repflow-tests:local sh deploy/check.sh
 python3 -m unittest discover -s deploy -p 'test_*.py' -v
 ```
 
-check.sh 创建独立临时 Compose 项目、内部测试库和假密码，执行 ruff、pytest、覆盖率、真实数据库连接、故障恢复、API 更换 IP、数据卷保留检查。配置测试只修改临时 nginx 副本：拒绝非法候选配置、重建后观察新增响应头、回退重建后确认响应头消失。退出时删除该临时项目及其卷。它显式隔离部署用 `.env`，不针对现有部署运行。
+check.sh 创建独立临时 Compose 项目、内部测试库和假密码，执行 ruff、pytest、覆盖率、真实数据库连接、暂停超时与故障恢复、API 更换 IP、数据卷保留检查。配置测试只修改临时 nginx 副本：拒绝非法候选配置、重建后观察新增响应头、回退重建后确认响应头消失。退出时删除该临时项目及其卷。它显式隔离部署用 `.env`，不针对现有部署运行。
 
 CI 用 Ubuntu 24.04 两种原生架构执行相同检查；`install-ci-tools.sh` 只用于可丢弃 CI runner，从官方发布资产安装固定插件并核验 SHA-256。
 
@@ -23,7 +23,9 @@ CI 还执行 `python3 deploy/mirror_images.py`，核对主 Compose 中的官方�
 
 ## 2. 首次服务器准备
 
-以下服务器命令由负责人本人执行；agent 准备命令与文档、协助分析脱敏结果，不连接生产服务器或读取服务器上的真实 `.env`、拉取凭据。以具有 sudo 的普通 SSH 用户操作。安装脚本目前限定 Ubuntu 26.04 amd64；已有活跃的系统 Docker/containerd 服务时停止，需先由负责人审查。
+以下服务器命令可由负责人执行，或由负责人明确授权的 agent 在指定服务器与任务范围内通过 SSH 执行；同一任务的已有授权持续有效，无需逐条重复确认。agent 可以在服务器直接生成服务密码并安全落盘配置，不回显明文，不读取或传播已有真实 `.env`、SSH 私钥和拉取凭据内容；个人账号登录或授权确需交互时再由负责人操作。部署工具正常使用配置，不将配置内容输出到日志或聊天。以具有 sudo 的普通 SSH 用户操作。安装脚本目前限定 Ubuntu 26.04 amd64；已有活跃的系统 Docker/containerd 服务时停止，需先由负责人审查。
+
+SSH 授权范围在对应 Issue 留下记录。删除数据卷、修改防火墙或云安全组、sshd、sudoers 等操作须有针对该操作的明确授权，不能仅依据任务级 SSH 授权执行；已取得的具体授权不重复询问。
 
 ```sh
 git clone --branch dev https://github.com/Team-Party-A/repflow.git "$HOME/repflow"
@@ -54,7 +56,7 @@ cp -n deploy/.env.example deploy/.env
 chmod 600 deploy/.env
 ```
 
-用编辑器填写新 `.env` 的数据库密码和上述 API_IMAGE 摘要。PAT、实际密码均由人配置，不发送到聊天或提交到 Git。Docker 原生配置保存的是可还原凭据；凭据到期或撤销后需重新登录才能拉取新版本，已有运行容器继续运行。CI 使用临时 GITHUB_TOKEN，服务器使用单独的只读凭据。
+新 `.env` 可由负责人填写，或由已授权 agent 在服务器生成随机数据库密码并安全落盘，同时填入上述 API_IMAGE 摘要；创建时拒绝覆盖已有配置，权限为 600，不回显密码。PAT 在个人账号授权需要本人交互时由负责人配置，凭据不发送到聊天或提交到 Git。Docker 原生配置保存的是可还原凭据，目录权限应为 700、文件为 600；凭据到期或撤销后需重新登录才能拉取新版本，已有运行容器继续运行。CI 使用临时 GITHUB_TOKEN，服务器使用单独的只读凭据。
 
 ## 4. 启动、更新与日志
 
@@ -112,3 +114,32 @@ curl --fail --silent --show-error http://127.0.0.1:8080/health
 - 记录部署、更新、回退的实际结果；尚未执行的项目写明待验收。骨架 PR 使用 `Refs #33`，合入后保留任务开放；部署验收完成后，由后续验收 PR 使用 `Closes #33` 完成闭环。
 
 本次未部署业务接口；HTTPS 在登录及客户端联调前落实。当前空库角色用于骨架验证，实际数据接入前补业务权限、备份恢复及资源参数验证。
+
+## 6. 部署与修复验收结果
+
+#43 的首次上线完成后，补充真实数据库暂停测试发现旧 API 在约 5 秒返回 504。该问题已由 #53 修复；当前部署使用已合入提交 `6ac6a944520c9bebd446dd90588fb6a5436d9591`，镜像来自对应 [dev 发布](https://github.com/Team-Party-A/repflow/actions/runs/40108125811)。发布的 8 个任务全部成功；amd64、arm64 均通过 ruff、14 项 pytest（语句／分支覆盖率 100%）和完整 Compose 检查，包含真实暂停数据库的 503 超时回归、故障恢复、API 换址、持久卷保留及 nginx 配置预检、更新与回退。API 和两个备用包的双架构发布、索引及发布时的 private 检查均通过。
+
+服务器使用已验证的 GHCR 备用配置，三个镜像均完成拉取并核对为 linux/amd64；API 的 OCI revision 与上述完整提交一致：
+
+| 服务 | GHCR 镜像 | 索引 SHA-256 |
+| --- | --- | --- |
+| api | `ghcr.io/team-party-a/repflow-api` | `24fe12de07c694f55cad3238ad6028088c0af2269f3b5e4dca92fa46a3766a23` |
+| db | `ghcr.io/team-party-a/repflow-postgres` | `0b0844b1f07661520c0a86054babe09708700c607f0b727ea8b375ea456f3798` |
+| nginx | `ghcr.io/team-party-a/repflow-nginx` | `b5fc535518439dde758b576c1370d6fb4b6b6f89895350c8224e48348e596dce` |
+
+- Ubuntu 26.04 x86_64；Docker 29.9.2、Compose 5.6.1、Buildx 0.38.1、containerd.io 2.4.2（包修订 3）；Rootless 用户服务 active/enabled，Linger=yes。
+- `.env` 权限为 600，拉取凭据目录／文件权限为 700／600；主 Compose、GHCR 备用配置和 nginx 候选配置检查通过。更新只替换非敏感的 API_IMAGE 字段，其余设置及数据库密码原样保留，不回显配置或凭据。
+- nginx、api、db 正常运行，api/db healthy，只有 nginx 发布宿主 8080；外网 `/health` 返回 `200 {"status":"ok"}`，其他路径返回 404。
+- 真实暂停 PostgreSQL 后，已有连接、重复请求及 API 冷启动三个场景均在约 3 秒返回 `503 {"status":"unavailable"}`，并带 `Cache-Control: no-store`；恢复数据库后回到 200。数据库停止与恢复场景也通过。具体实测耗时记录在 #33。
+- 重建 api/db 后 nginx 可继续访问；退出 SSH 后重新连接，以及重启用户级 Docker 后，三个服务均恢复。数据库集群标识及持久卷与更新前一致，业务库 public schema 表数量仍为 0。
+- 临时 SSH 下载转发、本机回环代理及服务器临时代理服务、Docker 代理环境变量均已撤除；撤除后重启 Docker，外网健康检查通过，服务运行不依赖本机。镜像来源、版本和摘要未改变。
+- 当前及上一版记录保存在服务器私有目录 `$HOME/.local/state/repflow/deployment.json`，目录／文件权限为 700／600；配置文件摘要与验收结果一并记录。当前配置版本为 `release-6ac6a94-config-v2`。
+
+| 角色 | 代码提交 | API 索引摘要 | 验收状态 |
+| --- | --- | --- | --- |
+| 当前 | `6ac6a944520c9bebd446dd90588fb6a5436d9591` | `24fe12de07c694f55cad3238ad6028088c0af2269f3b5e4dca92fa46a3766a23` | 本节部署与故障恢复检查通过 |
+| 上一版 | `e935600b5c282a84bfae2e088f3e1e563f53ace9` | `16cb26cd73762af9014380b0af1afa0219fd2879c388bb383b208594293bcde0` | 正常链路通过，暂停数据库超时未通过；不能视为已全面验收的回退版本 |
+
+本次执行了真实版本更新，未执行生产版本回退；nginx 配置回退已在双架构 CI 验证。后续更新或回退按第 4 节保留现有数据库卷和密码，并重新验证；不要仅因上一版镜像仍在缓存中就认为其所有故障场景已通过。
+
+后端健康检查的构建、测试、私有镜像发布、部署和恢复链路已验收；#33 由验收 PR 经人工审查合入后关闭。业务表与业务接口另按客户端需求及 API 契约推进，HTTPS 在登录及客户端联调前完成。服务器地址和敏感配置不进入仓库、Issue 或 PR。
