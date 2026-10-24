@@ -109,3 +109,13 @@ xcrun swift-format format --in-place --recursive .
 ```
 
 模拟器名称随 Xcode 版本变化，用 `xcrun simctl list devices available` 查本机有哪些。
+
+## 自动检查（Apple CI）
+
+[`Apple` 工作流](../../.github/workflows/apple.yml) 在 PR、向 dev/main 推送且 Apple 工程或工作流变动时执行。依次检查严格格式、iOS App 与嵌入的 Watch App 构建、两个 scheme 的实际 XCTest；任一步失败都会让检查失败。
+
+CI 使用官方 `xcode-27` runner，显式选择 Xcode **27.1（27A9275）**，测试设备固定为 **iPhone 17 / iOS 27.0** 与 **Apple Watch SE 3 (40mm) / watchOS 27.0**。版本或设备缺失时直接报错；先核对 runner 软件清单，再通过 PR 调整和复验，不切换到 runner 的默认 Xcode。环境依据 [GitHub 官方镜像说明](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md)。
+
+runner 目前仍属公开预览，底层镜像会滚动更新，容量或软件变化可能影响运行。CI 输出实际 Xcode、镜像版本和模拟器清单；测试统计见对应步骤日志。本机复现时，在上面的测试命令 destination 中追加 `,OS=27.0`，确保使用相同系统。
+
+CI 关闭模拟器构建签名，不需要个人 Apple 账号、Team 或证书。这里只验证骨架在所列模拟器上的构建与测试；iOS 17.2.1、watchOS 10.0 的最低版本真机验收仍单独进行。骨架目前每端仅一项模块加载测试，后续业务开发需继续补测试。
