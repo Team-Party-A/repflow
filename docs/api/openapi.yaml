@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: RepFlow 手机与后端接口
-  version: 0.1.0-draft
-  summary: '#32 评审草案；尚未冻结，不代表业务接口已经实现'
+  version: 1.0.0
+  summary: '1.0.0 已冻结；改字段须走契约 PR，由后端与 iOS 负责人共同批准。不代表业务接口已经实现'
   description: |
     依据 docs/requirements/01-ios.md、02-watch.md、03-backend.md、
     docs/prototype/README.md、docs/adr/0001-backend-stack.md，
     并与已合入 #51 的 docs/data/02-watch-phone-messages.md 对齐。
-    本稿由 Codex 协助起草，后端负责人已确认讨论方案；仍需客户端共同审查。
+    本稿由 Codex 协助起草，后端负责人已确认讨论方案，iOS 负责人已在 #49 审查批准。
     只约定 HTTP 数据与行为，不设计业务表。统计口径已确认，同步时延留到联调实测。
 
     【认证与账号】首次注册及登录需联网；成功后签发固定有效 365×24 小时的随机 token，
@@ -70,7 +70,7 @@ info:
 
     【同步时延】REQ-NFR-003 的 X/Y/Z 留到最低支持版本配对真机联调实测，
     记录设备、系统版本、网络及前后台条件后共同评审，不把未测数值作为验收承诺。
-  x-contract-status: draft
+  x-contract-status: frozen
   x-client-decisions:
     - id: CLIENT-STATS
       status: 已确认
