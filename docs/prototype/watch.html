@@ -128,7 +128,7 @@ header{padding:24px}
 <script>
 'use strict';
 const KEY='repflow-watch-prototype-v1';
-const EXERCISES=[{id:'curl',name:'哑铃弯举',supported:true},{id:'press',name:'哑铃肩推',supported:true},{id:'squat',name:'深蹲',supported:false}];
+const EXERCISES=[{id:'dumbbell_curl',name:'哑铃弯举',supported:true},{id:'dumbbell_shoulder_press',name:'哑铃肩推',supported:true},{id:'dumbbell_squat',name:'持哑铃深蹲',supported:false}];
 const fresh=()=>({page:'choose',selected:null,current:null,workouts:[],active:null,phone:{},connected:true,account:'A',permission:true,restDemo:true,localFail:false,phoneFail:false,ackLost:false,transferFail:false,notice:'',log:[],size:'45',large:false,dialog:null});
 let S=fresh(), transferTimer;
 try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&Array.isArray(saved.workouts)){S={...S,...saved,dialog:null};}}catch{S.notice='演示存储不可用，当前仅保留在页面内存。';}

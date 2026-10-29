@@ -23,12 +23,12 @@ function app(saved = new Map()) {
     input:value=>handlers.input({target:{id:'candidate',value}}),
     change:(id,value,type='select-one')=>handlers.change({target:{id,value,type,checked:value}})};
 }
-function start(a){a.action('select','curl');a.action('start');}
+function start(a){a.action('select','dumbbell_curl');a.action('start');}
 function save(a,n){a.action('inject',String(n));a.action('stop');a.action('save');}
 
 test('未选择、不支持动作、权限拒绝均不能开组',()=>{
  const a=app();a.action('start');assert.equal(a.state().current,null);
- a.action('select','squat');a.action('start');assert.equal(a.state().current,null);
+ a.action('select','dumbbell_squat');a.action('start');assert.equal(a.state().current,null);
  a.change('permission',false,'checkbox');start(a);assert.equal(a.state().current,null);
  assert.match(a.state().notice,/权限/);a.change('permission',true,'checkbox');a.action('start');assert.equal(a.state().page,'count');
 });
