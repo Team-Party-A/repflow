@@ -11,6 +11,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import PoolProxiedConnection
 
+from app.auth import initialize_auth, router
+from app.errors import install_error_handlers
 from app.settings import DatabaseSettings
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,7 @@ def create_app(settings: DatabaseSettings | None = None) -> FastAPI:
             engine, expire_on_commit=False
         )
         try:
+            await initialize_auth(application)
             yield
         finally:
             await engine.dispose()
@@ -61,6 +64,8 @@ def create_app(settings: DatabaseSettings | None = None) -> FastAPI:
     application = FastAPI(
         lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
     )
+    application.include_router(router)
+    install_error_handlers(application)
 
     @application.get("/health")
     async def health(request: Request) -> JSONResponse:

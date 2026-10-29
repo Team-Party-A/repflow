@@ -6,6 +6,8 @@ COPY --from=uv /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --locked --no-dev
 COPY app ./app
+COPY alembic.ini ./
+COPY migrations ./migrations
 
 FROM base AS test
 RUN uv sync --locked
@@ -17,6 +19,8 @@ WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY --from=base /app/.venv /app/.venv
 COPY --from=base /app/app /app/app
+COPY --from=base /app/alembic.ini /app/alembic.ini
+COPY --from=base /app/migrations /app/migrations
 USER 10001:10001
 LABEL org.opencontainers.image.source="https://github.com/Team-Party-A/repflow"
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--log-level", "info", "--no-access-log"]
