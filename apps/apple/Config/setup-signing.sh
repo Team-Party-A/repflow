@@ -33,4 +33,4 @@ cat > Local.xcconfig <<EOF
 DEVELOPMENT_TEAM = $team
 BUNDLE_ID_SUFFIX = .$suffix
 EOF
-echo "已生成 $(pwd)/Local.xcconfig：Team $team，Bundle ID io.github.teampartya.repflow.$suffix"
+echo "已生成 $(pwd)/Local.xcconfig：Team ${team}，Bundle ID io.github.teampartya.repflow.${suffix}"
