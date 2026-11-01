@@ -11,9 +11,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import PoolProxiedConnection
 
-from app.auth import initialize_auth, router
+from app.auth import initialize_auth
+from app.auth import router as auth_router
 from app.errors import install_error_handlers
 from app.settings import DatabaseSettings
+from app.workouts import router as workouts_router
 
 logger = logging.getLogger(__name__)
 HEALTH_TIMEOUT_SECONDS = 3
@@ -64,7 +66,8 @@ def create_app(settings: DatabaseSettings | None = None) -> FastAPI:
     application = FastAPI(
         lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
     )
-    application.include_router(router)
+    application.include_router(auth_router)
+    application.include_router(workouts_router)
     install_error_handlers(application)
 
     @application.get("/health")

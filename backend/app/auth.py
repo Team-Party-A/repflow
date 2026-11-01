@@ -55,6 +55,22 @@ async def database_session(request: Request):
 DatabaseSession = Annotated[AsyncSession, Depends(database_session)]
 
 
+async def authenticated_user_id(request: Request, session: AsyncSession) -> UUID:
+    scheme, separator, token = request.headers.get("Authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not separator or not token:
+        raise APIError(401, "AUTH_REQUIRED", "请重新登录")
+    user_id = await session.scalar(
+        select(LoginSession.user_id).where(
+            LoginSession.token_hash == token_digest(token),
+            LoginSession.revoked_at.is_(None),
+            LoginSession.expires_at > now_utc(),
+        )
+    )
+    if user_id is None:
+        raise APIError(401, "AUTH_REQUIRED", "请重新登录")
+    return user_id
+
+
 class Credentials(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
     username: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_]+$")

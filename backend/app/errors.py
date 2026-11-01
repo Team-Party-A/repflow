@@ -11,16 +11,22 @@ logger = logging.getLogger(__name__)
 
 
 class APIError(Exception):
-    def __init__(self, status: int, code: str, message: str):
+    def __init__(self, status: int, code: str, message: str, *, current_revision=None):
         self.status, self.code, self.message = status, code, message
+        self.current_revision = current_revision
 
 
-def error_response(status: int, code: str, message: str, fields=None) -> JSONResponse:
+def error_response(
+    status: int, code: str, message: str, fields=None, current_revision=None
+) -> JSONResponse:
     headers = {"Cache-Control": "no-store"}
     if status == 401:
         headers["WWW-Authenticate"] = "Bearer"
+    error = {"code": code, "message": message, "fields": fields or []}
+    if code == "REVISION_CONFLICT" and current_revision is not None:
+        error["current_revision"] = current_revision
     return JSONResponse(
-        {"error": {"code": code, "message": message, "fields": fields or []}},
+        {"error": error},
         status_code=status,
         headers=headers,
     )
@@ -39,20 +45,48 @@ def install_error_handlers(application: FastAPI) -> None:
 
     @application.exception_handler(APIError)
     async def api_error(request: Request, error: APIError):
-        return error_response(error.status, error.code, error.message)
+        return error_response(
+            error.status,
+            error.code,
+            error.message,
+            current_revision=error.current_revision,
+        )
 
     @application.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, error: RequestValidationError):
         if any(item["type"] == "json_invalid" for item in error.errors()):
             return error_response(400, "INVALID_REQUEST", "请求格式错误")
-        # 校验库的 msg/input/ctx 可能包含密码或请求值，仅暴露已知字段名。
-        fields = [
-            {"path": "/" + item["loc"][1], "message": "字段不符合接口要求"}
-            for item in error.errors()
-            if len(item["loc"]) == 2
-            and item["loc"][0] == "body"
-            and item["loc"][1] in {"username", "password"}
-        ]
+        # loc 中的额外键也可能是敏感输入，只允许已知字段和数组下标进入路径。
+        known = {
+            "username",
+            "password",
+            "revision",
+            "record_kind",
+            "started_at",
+            "ended_at",
+            "time_zone",
+            "sets",
+            "set_id",
+            "exercise_id",
+            "final_rep_count",
+            "estimated_rep_count",
+            "record_source",
+            "weight_grams",
+        }
+        fields = []
+        for item in error.errors():
+            location = item["loc"]
+            if location[0] != "body":
+                path = ""
+            elif all(type(part) is int or part in known for part in location[1:]):
+                path = (
+                    "/" + "/".join(str(part) for part in location[1:])
+                    if len(location) > 1
+                    else ""
+                )
+            else:
+                continue
+            fields.append({"path": path, "message": "字段不符合接口要求"})
         return error_response(422, "VALIDATION_ERROR", "请求字段不合法", fields)
 
     @application.exception_handler(HTTPException)
