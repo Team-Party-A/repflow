@@ -160,9 +160,9 @@ smoothed = moving_average(samples, window=5)
 2. 从 `dev` 拉出 feature 分支。
 3. agent 根据 Issue 和相关文件实现，同时写单元测试。
 4. 作者逐段读懂代码，在本地跑通测试和格式化；看不懂的地方让 agent 解释。
-5. 按规范提交，开 PR（人或 agent 都可以开），填写模板（包括 AI 参与说明）。
+5. 按规范提交，开 PR（人或 agent 都可以开），填写模板（包括 AI 参与说明）。还有提交没推完时，PR 只能是 Draft，不请求审查、不邀请作者以外的人来看；全部提交推送完毕后再转为 Ready for review 并请求审查。转为 Ready 后还要再推提交的，先转回 Draft（`gh pr ready <编号> --undo`），推完再转回 Ready，并请审查人重新审查。
 6. 另一名成员审查，批准由人点。
-7. 作者开 PR 时开启自动合入，非作者批准且 CI 通过后自动 squash 合入（见 CONTRIBUTING.md 第 3 节）；没有非作者批准不能合入。Issue 经 `Closes #N` 自动关闭，分支自动删除。改契约文件的 PR 例外：等所有受影响模块负责人批准后再开启自动合入（见 CONTRIBUTING.md 第 3 节）。
+7. 作者在 PR 转为 Ready for review 时开启自动合入（Draft 状态不能开启），非作者批准且 CI 通过后自动 squash 合入（见 CONTRIBUTING.md 第 3 节）；没有非作者批准不能合入。Issue 经 `Closes #N` 自动关闭，分支自动删除。改契约文件的 PR 例外：等所有受影响模块负责人批准后再开启自动合入（见 CONTRIBUTING.md 第 3 节）。
 
 第 6 步「另一名成员审查」只有一个例外：Wiki [团队章程](https://github.com/Team-Party-A/repflow/wiki/团队章程)「组长职责」一节的紧急通道，组长可以经 PR 绕过审查合入（仍不能直推或强推），适用条件和事后要求以章程为准。工程规范以本文件为准，团队分工和组长权限以章程为准。agent 不得使用紧急通道，也不得以它为由合并 PR。
 
