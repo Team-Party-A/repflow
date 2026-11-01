@@ -1,6 +1,7 @@
 # 后端骨架部署与验收
 
 关联 #33，选型及维护影响见 [ADR 0002](adr/0002-backend-deployment.md)。
+第 1–6 节保留已上线骨架的操作与记录；#61 公网 IP HTTPS 方案和待验收项见第 7 节。
 入口为 HTTP 8080 的 `/health`，nginx → api → db；业务接口和业务表后续按契约实现。服务器地址在个人 SSH 配置中管理，本文及 Issue/PR 只记录脱敏结果。
 
 ## 1. 本地与 CI 检查
@@ -59,6 +60,8 @@ chmod 600 deploy/.env
 新 `.env` 可由负责人填写，或由已授权 agent 在服务器生成随机数据库密码并安全落盘，同时填入上述 API_IMAGE 摘要；创建时拒绝覆盖已有配置，权限为 600，不回显密码。PAT 在个人账号授权需要本人交互时由负责人配置，凭据不发送到聊天或提交到 Git。Docker 原生配置保存的是可还原凭据，目录权限应为 700、文件为 600；凭据到期或撤销后需重新登录才能拉取新版本，已有运行容器继续运行。CI 使用临时 GITHUB_TOKEN，服务器使用单独的只读凭据。
 
 ## 4. 启动、更新与日志
+
+本节命令用于原 HTTP 骨架。启用第 7 节 HTTPS 后，更新时必须同时加载 TLS 配置；仅使用本节配置重建 nginx 会回退到 HTTP。日常 TLS 配置更新使用第 7 节的 `tls.py activate`。
 
 在仓库根目录操作。生产 API_IMAGE 使用工作流给出的摘要；记录代码提交、镜像摘要及配置版本。云安全组需允许 TCP 8080，api/db 不映射宿主端口。
 
@@ -143,3 +146,73 @@ curl --fail --silent --show-error http://127.0.0.1:8080/health
 本次执行了真实版本更新，未执行生产版本回退；nginx 配置回退已在双架构 CI 验证。后续更新或回退按第 4 节保留现有数据库卷和密码，并重新验证；不要仅因上一版镜像仍在缓存中就认为其所有故障场景已通过。
 
 后端健康检查的构建、测试、私有镜像发布、部署和恢复链路已验收；#33 由验收 PR 经人工审查合入后关闭。业务表与业务接口另按客户端需求及 API 契约推进，HTTPS 在登录及客户端联调前完成。服务器地址和敏感配置不进入仓库、Issue 或 PR。
+
+## 7. 公网 IP HTTPS（#61，已试部署，通知与真机待验收）
+
+采用现有 nginx＋Rootless Docker，使用 Certbot **5.9.0** 的 webroot HTTP-01 验证与 Let’s Encrypt `shortlived` IP 证书（当前有效期 160 小时）。80 只服务验证文件；公网 **HTTPS 8080** 映射到容器 443，提供 `/health` 和脱敏续期状态，不开放账号路由。客户端与监测地址必须显式带 `:8080`，原 HTTP 8080 被替换。证书通过 IP SAN 校验，不关闭 TLS 验证，不要求安装测试 CA 或设置 ATS 例外。[官方方案](https://letsencrypt.org/2026/03/11/shorter-certs-certbot/)、[证书配置](https://letsencrypt.org/docs/profiles/)。
+
+- Certbot 官方索引：`certbot/certbot:v5.9.0@sha256:bc93cb710b413e6b456d622f9b0133b3e109c0a78c2ed9976af43d209b0a1805`；覆盖 amd64/arm64。nginx、PostgreSQL 和监测用 Python 镜像沿用现有固定版本及摘要。
+- CI 备用同步增加私有 `repflow-certbot`，沿用来源／架构／摘要检查。发布后服务器使用实际 GHCR 摘要；升级需 PR 和双架构测试。
+- `tls.py` 使用用户级文件锁，防止人工操作与定时器同时执行。证书目录在仓库外、权限 700，私钥不复制进仓库；nginx 只读挂载完整证书目录以跟踪续期后的符号链接。Certbot 不挂载 Docker socket。
+- 定时器每日 UTC 00:00、12:00 检查，随机延迟不超过 30 分钟（北京时间 08:00、20:00）；`Persistent=true` 补执行停机期间错过的任务，沿用已启用的 linger。随机延迟统一由 systemd 提供，关闭 Certbot 内部的额外等待，避免占用命令超时预算。
+- 更新后先校验证书链、IP 和余期，再执行 `nginx -t`、reload，并比较实际送出的证书指纹及 `/health`。失败保留待加载标记，下次重试；操作结果原子写入仅含 `ok/checked_at` 的状态文件。错误输出保存到服务器私有 `last-command.log`，不贴到 Issue/PR。
+
+### 部署权限与前置条件
+
+2026-10-29 只读预检：80/443 无监听，Rootless 低端口阈值为 1024、RootlessKit 无相应能力；UFW inactive。外部 80 拒绝连接、443 超时、8080 可达；ACME 正式／测试目录均返回 200，Docker Hub 超时。**这些结果尚不能证明 80/443 已被云安全组放行。**
+
+负责人审阅代码后授权提前试部署，并明确允许下表中的 RootlessKit 权限调整、Docker 重启和 nginx 重建。已设置能力并重启 Docker，nginx/api/db 均恢复，镜像和数据卷挂载未变；公网 HTTP-01 与 Let’s Encrypt staging 签发通过。443 本机可达、外网超时，负责人无法管理云端规则，已确认改用现有可达的 **HTTPS 8080**，不修改云安全组。
+
+| 操作 | 影响／确认点 |
+| --- | --- |
+| 核对公网 IPv4 和现有端口 | 已验证 TCP 80/8080 可达；保持 80 用于签发和续期。更换 IP 需重新签发并更新客户端与监测配置；未来改 443 需先由云管理员放行，再调整入口和监测端口。 |
+| `sudo setcap cap_net_bind_service=ep /usr/bin/rootlesskit` | 仅给 RootlessKit 绑定低端口的能力；不修改全系统低端口阈值。Docker 软件包升级后需重新检查能力。[官方说明](https://docs.docker.com/engine/security/rootless/tips/#exposing-privileged-ports) |
+| `systemctl --user restart docker` | 会中断当前 nginx/api/db，之后检查恢复；数据库卷不删除。 |
+| nginx 引导、切换与回退 | 重建 nginx 以加载候选配置；引导签发期间健康检查可能暂停，失败可回退原 HTTP 8080 健康检查。 |
+| 安装用户级 timer、启用 GitHub 监测 | 新建私有配置、定时器和仓库 Secret／Variable；不改数据库密码或表。 |
+
+### 初始化与续期
+
+常规部署在 PR 合入及上述操作确认后执行；本次提前试部署已有负责人明确授权。先取得 CI 的 `CERTBOT_IMAGE` 摘要。创建权限 600 的 `$HOME/.config/repflow/tls.env`，包含 `PUBLIC_IP`（实际公网 IPv4）、`TLS_STATE_DIR`（仓库外绝对路径，如 `$HOME/.local/state/repflow/tls` 展开后的路径）、`TLS_USE_GHCR=1`、`HTTPS_PORT=8080` 和 `CERTBOT_IMAGE`；现有 `deploy/.env` 原样保留。不要将私有配置内容发到聊天或 GitHub。
+
+本次 Docker Hub 不可达、GHCR 备用包尚未发布，已从本机按上述官方摘要拉取 amd64 镜像，经 `docker save`、SSH 传输和服务器 `docker load` 导入。两端校验归档 SHA-256、镜像 ID 及架构，运行版本为 5.9.0；临时用导入的不可变镜像 ID 配置 `CERTBOT_IMAGE`。GHCR 发布后换回其固定摘要，无需更改证书目录。服务器当前运行审阅后的候选文件，合入后另做文件比对并更新部署记录。
+
+在服务器仓库根目录操作，使用现有 Python 3 与 OpenSSL 系统工具：
+
+```sh
+set -a
+. "$HOME/.config/repflow/tls.env"
+set +a
+python3 deploy/tls.py bootstrap
+python3 deploy/tls.py staging    # 独立 staging 目录，不覆盖正式证书
+python3 deploy/tls.py issue      # 签发正式证书并切换 HTTPS
+python3 deploy/tls.py dry-run    # 真实 ACME 演练，并验证当前正式证书的加载
+mkdir -p "$HOME/.config/systemd/user"
+install -m 644 deploy/repflow-cert-renew.service deploy/repflow-cert-renew.timer "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload
+systemctl --user start repflow-cert-renew.service
+systemctl --user enable --now repflow-cert-renew.timer
+systemctl --user list-timers repflow-cert-renew.timer
+```
+
+`tls.py` 默认使用 `rootless` context、`repflow` 项目名和 `deploy/.env`；用户服务默认仓库路径为 `$HOME/repflow`。Certbot 自动读取私有配置，不回显；不依赖邮箱提醒。日常排查用 `systemctl --user status repflow-cert-renew.service` 与 `journalctl --user -u repflow-cert-renew.service`。更新 TLS 配置用 `python3 deploy/tls.py activate`：先在临时容器预检，再重建 nginx；人工再次续期用 `renew`。
+
+### GitHub 失败提醒
+
+新增 `HTTPS monitor` 工作流，固定 Python 3.14.9 镜像，每 6 小时从外部检查证书链／IP、至少 48 小时余期、`/health`，以及最近 26 小时内成功的续期状态。续期失败、加载失败、定时器停摆、服务不可达均使任务失败；无 SSH 或包写入权限。定时任务有排队延迟，不能当作即时告警。
+
+**当前仅服务器自动续期已启用，GitHub 外部监测尚未启用，失败通知尚未验收。** 工作流合入默认分支后，按下述步骤配置并验证通知送达。
+
+部署成功后把公网 IPv4 存入仓库 Secret `HTTPS_MONITOR_IP`，设置 Variables `HTTPS_MONITOR_PORT=8080`、`HTTPS_MONITOR_ENABLED=true`；默认关闭以避免未部署时误报。负责人启用 GitHub Actions 的邮件／站内失败通知，先手动正常运行，再用 `test_alert=true` 故意失败一次，确认本人收到通知。仅看到红灯不代表提醒已送达；修改 cron 或重新启用工作流可能改变通知接收人。[GitHub 通知说明](https://docs.github.com/en/actions/concepts/workflows-and-actions/notifications-for-workflow-runs)。
+
+### 回退与验收
+
+- 证书续期失败时不重建 nginx，已加载的证书继续服务；在其到期前修复并重试。配置回退恢复上一版 TLS 文件后执行 `activate`；先校验，失败不重建。不要换回已过期证书。
+- 紧急退回骨架时先停用 timer／外部监测，再按第 4 节仅重建原 HTTP 8080 nginx；保留证书目录、数据库卷和密码。该入口只允许健康检查，不能承载登录。
+- 本地测试生成一次性 CA／证书，覆盖信任链、IP 不匹配、余期不足、实际证书替换、失败／过时状态和加载重试；不申请公网证书。
+- 本地复核（2026-11-01，已同步 dev `6648084`）：Python 3.14.9 下 34 项部署／TLS 测试通过；ruff（沿用后端规则，目标 Python 3.12）、Shell 语法、官方／GHCR Compose 配置、80／8080 映射、数据库隔离与卷挂载、定时器和监测工作流配置、密钥扫描通过。此前服务器 Python 3.14.4 下同样 34 项通过。
+- 服务器实测：staging／正式签发成功；外网 HTTPS 8080 证书链和 IP 校验、TLS 1.2／1.3、`/health` 与续期状态通过。真实 ACME `dry-run`、部署钩子、nginx 加载及证书核对通过，用户级续期服务运行成功、每日两次 timer 已启用。
+- 恢复实测：无效 nginx 配置被拦截，原 HTTPS 保持可用且失败状态可被监测脚本识别；恢复配置、回退 HTTP 8080 再切回 HTTPS、退出本次 SSH 后外网检查、Rootless Docker 重启恢复均通过。镜像、数据库卷挂载与证书保持不变；未执行整机重启或删除数据卷。
+- `check.sh` 保留原有验收，并调用 `check_https_stack.py` 验证 HTTP-01、真实 nginx HTTPS、reload、nginx 重启和无效配置拒绝／回退；只使用独立临时项目和测试卷。本机空间紧张，最小容器停在 Created，重启 Docker Desktop 后仍启动超时，尚未确认根因。负责人同意暂缓本机镜像构建／完整 Compose 验收，本机结果记为环境受阻；测试不删除、不设跳过，完整验证由 CI 执行。
+- 双架构验收（2026-11-01）：[PR #83 的 Backend CI](https://github.com/Team-Party-A/repflow/actions/runs/41267660112) 在代码提交 `7a5d558` 上通过；amd64／arm64 各通过 34 项部署／TLS 测试、56 项后端 pytest，pytest-cov 报告覆盖率 99%。镜像构建、数据库超时／恢复、API 换址、数据卷保留、nginx 配置更新／回退，以及完整 HTTPS 检查均通过；三个官方镜像的固定来源／架构核对通过。PR 不发布镜像或备用包。
+- **仍待验收**：PR 审查合入和 GHCR 备用包发布；GitHub 通知送达。iOS 17.2.1 真机 `/health` 因设备问题经负责人确认暂缓，后续补验，不记为通过。GitHub 定时监测需工作流合入默认分支后启用；正式证书到期续期尚未发生，当前验证为 ACME 演练和加载流程。账号接口部署就绪后另补登录测试。

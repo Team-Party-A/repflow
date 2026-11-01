@@ -13,7 +13,7 @@ class RegistryGuardTests(unittest.TestCase):
     def test_backup_packages_are_checked_and_other_packages_are_rejected(
         self, open_request
     ):
-        for package in ("repflow-postgres", "repflow-nginx"):
+        for package in ("repflow-postgres", "repflow-nginx", "repflow-certbot"):
             open_request.return_value = io.BytesIO(b'{"visibility":"private"}')
             require_private(package_name=package)
             self.assertEqual(

@@ -156,3 +156,4 @@ expect_health 200 ok
 cluster_after=$(compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT system_identifier FROM pg_control_system()"')
 test "$cluster_before" = "$cluster_after"
 printf 'Compose checks passed: database recovery, API DNS refresh, persistent cluster.\n'
+python3 "$script_dir/check_https_stack.py"

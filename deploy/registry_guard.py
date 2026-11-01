@@ -7,7 +7,7 @@ import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-PACKAGE_NAMES = ("repflow-api", "repflow-postgres", "repflow-nginx")
+PACKAGE_NAMES = ("repflow-api", "repflow-postgres", "repflow-nginx", "repflow-certbot")
 PACKAGE_ROOT = "https://api.github.com/orgs/Team-Party-A/packages/container/"
 PACKAGE_URL = PACKAGE_ROOT + "repflow-api"
 logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ def require_private(allow_missing=False, package_name="repflow-api"):
         with urlopen(request, timeout=30) as response:
             package = json.load(response)
     except HTTPError as error:
+        error.close()
         if error.code == 404 and allow_missing:
             return
         raise RuntimeError(f"GHCR metadata request failed: HTTP {error.code}") from None
