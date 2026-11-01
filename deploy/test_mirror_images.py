@@ -88,6 +88,19 @@ class MirrorImageTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             verify_copy({"config": {"digest": "sha256:" + "b" * 64}}, identity)
 
+    @patch("mirror_images.docker_json")
+    def test_certbot_is_mirrored_from_its_official_pinned_image(self, docker):
+        docker.return_value = {
+            "services": {
+                "db": {"image": "postgres:18.6@sha256:" + "a" * 64},
+                "nginx": {"image": "nginx:1.30.6@sha256:" + "b" * 64},
+                "certbot": {"image": "certbot/certbot:v5.9.0@sha256:" + "c" * 64},
+            }
+        }
+        sources = source_images()
+        self.assertEqual(sources[-1][1:], ("repflow-certbot", "CERTBOT_IMAGE"))
+        self.assertTrue(sources[-1][0].startswith("certbot/certbot:v5.9.0@sha256:"))
+
     def test_index_rejects_missing_or_duplicate_architectures(self):
         amd64 = {"platform": {"os": "linux", "architecture": "amd64"}}
         arm64 = {"platform": {"os": "linux", "architecture": "arm64"}}

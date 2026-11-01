@@ -14,6 +14,7 @@ COMPOSE_FILE = Path(__file__).with_name("compose.yaml")
 MIRRORS = (
     ("db", "postgres", "repflow-postgres", "POSTGRES_IMAGE"),
     ("nginx", "nginx", "repflow-nginx", "NGINX_IMAGE"),
+    ("certbot", "certbot/certbot", "repflow-certbot", "CERTBOT_IMAGE"),
 )
 logger = logging.getLogger(__name__)
 
@@ -30,14 +31,23 @@ def docker_json(*arguments, environment=None):
 
 
 def source_images():
-    # 版本以主 Compose 为唯一来源，隔离真实部署配置和密码。
-    environment = dict(os.environ, API_IMAGE="unused", POSTGRES_PASSWORD="source-check")
+    # 版本以官方 Compose 为来源，隔离真实部署配置、镜像覆盖和密码。
+    environment = dict(
+        os.environ,
+        API_IMAGE="unused",
+        POSTGRES_PASSWORD="source-check",
+        TLS_STATE_DIR="/tmp/repflow-source-check",
+    )
     config = docker_json(
         "compose",
         "--env-file",
         os.devnull,
         "-f",
         str(COMPOSE_FILE),
+        "-f",
+        str(COMPOSE_FILE.with_name("compose.tls.yaml")),
+        "--profile",
+        "tls-tools",
         "config",
         "--format",
         "json",

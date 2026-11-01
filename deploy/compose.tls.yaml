@@ -1,0 +1,22 @@
+# 和 compose.yaml 一起使用；生产目录必须在仓库外，归 SSH 用户所有。
+services:
+  nginx:
+    ports: !override
+      - "${HTTP_BIND:-0.0.0.0}:${ACME_HTTP_PORT:-80}:80"
+      - "${HTTP_BIND:-0.0.0.0}:${HTTPS_PORT:-8080}:443"
+    volumes:
+      - "${TLS_NGINX_CONFIG:-./nginx.tls.conf}:/etc/nginx/nginx.conf:ro"
+      - "${TLS_STATE_DIR:?Set TLS_STATE_DIR}/letsencrypt:/etc/letsencrypt:ro"
+      - "${TLS_STATE_DIR}/webroot:/var/www/acme:ro"
+      - "${TLS_STATE_DIR}/status:/var/www/tls-status:ro"
+  certbot:
+    image: certbot/certbot:v5.9.0@sha256:bc93cb710b413e6b456d622f9b0133b3e109c0a78c2ed9976af43d209b0a1805
+    profiles: [tls-tools]
+    volumes:
+      - "${TLS_CERT_DIR:-${TLS_STATE_DIR}/letsencrypt}:/etc/letsencrypt"
+      - "${TLS_STATE_DIR}/webroot:/var/www/acme"
+      - "${TLS_STATE_DIR}/logs:/var/log/letsencrypt"
+    tmpfs: [/var/lib/letsencrypt]
+    networks: [frontend]
+    logging:
+      driver: none
