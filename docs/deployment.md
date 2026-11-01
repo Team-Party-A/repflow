@@ -213,5 +213,6 @@ systemctl --user list-timers repflow-cert-renew.timer
 - 本地复核（2026-11-01，已同步 dev `6648084`）：Python 3.14.9 下 34 项部署／TLS 测试通过；ruff（沿用后端规则，目标 Python 3.12）、Shell 语法、官方／GHCR Compose 配置、80／8080 映射、数据库隔离与卷挂载、定时器和监测工作流配置、密钥扫描通过。此前服务器 Python 3.14.4 下同样 34 项通过。
 - 服务器实测：staging／正式签发成功；外网 HTTPS 8080 证书链和 IP 校验、TLS 1.2／1.3、`/health` 与续期状态通过。真实 ACME `dry-run`、部署钩子、nginx 加载及证书核对通过，用户级续期服务运行成功、每日两次 timer 已启用。
 - 恢复实测：无效 nginx 配置被拦截，原 HTTPS 保持可用且失败状态可被监测脚本识别；恢复配置、回退 HTTP 8080 再切回 HTTPS、退出本次 SSH 后外网检查、Rootless Docker 重启恢复均通过。镜像、数据库卷挂载与证书保持不变；未执行整机重启或删除数据卷。
-- `check.sh` 保留原有验收，并调用 `check_https_stack.py` 验证 HTTP-01、真实 nginx HTTPS、reload、nginx 重启和无效配置拒绝／回退；只使用独立临时项目和测试卷。本机空间紧张，最小容器停在 Created，重启 Docker Desktop 后仍启动超时，尚未确认根因。负责人同意暂缓本机镜像构建／完整 Compose 验收，结果记为环境受阻；测试不删除、不设跳过，允许推送后由现有 amd64／arm64 CI 完整执行。
-- **仍待验收**：完整双架构 CI、PR 审查合入和 GHCR 备用包发布；GitHub 通知送达。iOS 17.2.1 真机 `/health` 因设备问题经负责人确认暂缓，后续补验，不记为通过。GitHub 定时监测需工作流合入默认分支后启用；正式证书到期续期尚未发生，当前验证为 ACME 演练和加载流程。账号接口部署就绪后另补登录测试。
+- `check.sh` 保留原有验收，并调用 `check_https_stack.py` 验证 HTTP-01、真实 nginx HTTPS、reload、nginx 重启和无效配置拒绝／回退；只使用独立临时项目和测试卷。本机空间紧张，最小容器停在 Created，重启 Docker Desktop 后仍启动超时，尚未确认根因。负责人同意暂缓本机镜像构建／完整 Compose 验收，本机结果记为环境受阻；测试不删除、不设跳过，完整验证由 CI 执行。
+- 双架构验收（2026-11-01）：[PR #83 的 Backend CI](https://github.com/Team-Party-A/repflow/actions/runs/41267660112) 在代码提交 `7a5d558` 上通过；amd64／arm64 各通过 34 项部署／TLS 测试、56 项后端 pytest，pytest-cov 报告覆盖率 99%。镜像构建、数据库超时／恢复、API 换址、数据卷保留、nginx 配置更新／回退，以及完整 HTTPS 检查均通过；三个官方镜像的固定来源／架构核对通过。PR 不发布镜像或备用包。
+- **仍待验收**：PR 审查合入和 GHCR 备用包发布；GitHub 通知送达。iOS 17.2.1 真机 `/health` 因设备问题经负责人确认暂缓，后续补验，不记为通过。GitHub 定时监测需工作流合入默认分支后启用；正式证书到期续期尚未发生，当前验证为 ACME 演练和加载流程。账号接口部署就绪后另补登录测试。
