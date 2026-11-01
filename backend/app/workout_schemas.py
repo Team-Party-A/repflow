@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -10,6 +10,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    field_serializer,
     field_validator,
     model_validator,
 )
@@ -47,17 +48,24 @@ def parse_utc_time(value):
     return datetime.fromisoformat(value)
 
 
-def parse_query_revision(value):
+def parse_query_integer(value):
     # URL 参数本来就是字符串，先拒绝 1.0 等写法，再交给严格整数范围校验。
     if not isinstance(value, str) or not re.fullmatch(r"[0-9]+", value):
-        raise ValueError("必须为整数版本")
+        raise ValueError("必须为整数")
     return int(value)
 
 
 ClientId = Annotated[UUID4, BeforeValidator(parse_client_id)]
 UtcTime = Annotated[datetime, BeforeValidator(parse_utc_time)]
 Revision = Annotated[int, Field(strict=True, ge=1, le=2147483647)]
-QueryRevision = Annotated[Revision, BeforeValidator(parse_query_revision)]
+QueryRevision = Annotated[Revision, BeforeValidator(parse_query_integer)]
+QueryLimit = Annotated[
+    int, Field(strict=True, ge=1, le=100), BeforeValidator(parse_query_integer)
+]
+
+
+def utc_text(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 class StrictInput(BaseModel):
@@ -121,3 +129,33 @@ class WriteReceipt(StrictInput):
     workout_id: UUID4
     accepted_revision: Revision
     deleted: bool
+
+
+class WorkoutSetResult(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    set_id: UUID4
+    exercise_id: str
+    final_rep_count: int
+    estimated_rep_count: int | None
+    record_source: Literal["automatic", "manual"]
+    weight_grams: int | None
+
+
+class WorkoutResult(BaseModel):
+    workout_id: UUID4
+    revision: Revision
+    record_kind: Literal["actual"]
+    started_at: datetime
+    ended_at: datetime | None
+    time_zone: str
+    sets: list[WorkoutSetResult] = Field(min_length=1, max_length=1000)
+
+    @field_serializer("started_at", "ended_at")
+    def utc_times(self, value: datetime | None) -> str | None:
+        return None if value is None else utc_text(value)
+
+
+class WorkoutPage(BaseModel):
+    items: list[WorkoutResult] = Field(max_length=100)
+    next_cursor: str | None
