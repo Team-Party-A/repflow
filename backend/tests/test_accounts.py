@@ -294,6 +294,8 @@ def test_real_migrations_match_models_and_round_trip(account_database):
         assert set(inspect(connection).get_table_names()) == {
             "users",
             "sessions",
+            "workouts",
+            "workout_sets",
             "alembic_version",
         }
         assert (
@@ -308,6 +310,8 @@ def test_real_migrations_match_models_and_round_trip(account_database):
         assert set(inspect(connection).get_table_names()) == {
             "users",
             "sessions",
+            "workouts",
+            "workout_sets",
             "alembic_version",
         }
 
