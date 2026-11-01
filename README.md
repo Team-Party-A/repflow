@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/app-icon.png" width="128" alt="RepFlow 应用图标"></p>
+
 # RepFlow
 
 RepFlow 是一个用 Apple Watch 自动计次的健身记录 App：开组前选好动作，组内由手表自动数次数，训练记录同步到 iPhone 和后端。
