@@ -1,17 +1,21 @@
 """可丢弃 Compose 项目的 HTTPS 验收；只生成测试证书，不访问 ACME。"""
 
+import http.client
 import json
 import logging
 import os
 import shutil
 import socket
+import ssl
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
 from https_probe import STATUS_PATH, TLSCheckError, probe
+from release_probe import status_of, status_path
 from test_https_probe import create_test_certificates
 from tls import TLSManager
 
@@ -91,6 +95,25 @@ def check():
         def verify():
             return probe("127.0.0.1", https_port, cafile=root / "ca.pem")
 
+        def expect_fingerprint(expected):
+            # nginx 热加载时旧 worker 可能短暂继续完成 TLS 握手。
+            deadline = time.monotonic() + 10
+            while True:
+                actual = verify()
+                if actual == expected:
+                    return
+                assert time.monotonic() < deadline, (actual, expected)
+                time.sleep(0.25)
+
+        def expect_route(url, status, context=None):
+            try:
+                with urlopen(url, timeout=5, context=context) as response:
+                    actual = response.status
+            except HTTPError as error:
+                actual = error.code
+                error.close()
+            assert actual == status, (actual, status)
+
         try:
             command("config", "--quiet")
             version = command("run", "--rm", "--no-deps", "certbot", "--version")
@@ -100,35 +123,77 @@ def check():
             challenge = manager.state / "webroot/.well-known/acme-challenge/probe"
             challenge.parent.mkdir(parents=True, exist_ok=True)
             challenge.write_text("repflow-http-01-test")
-            with urlopen(
-                f"http://127.0.0.1:{http_port}/.well-known/acme-challenge/probe",
-                timeout=5,
-            ) as response:
-                assert response.read() == b"repflow-http-01-test"
+            for attempt in range(10):
+                try:
+                    with urlopen(
+                        f"http://127.0.0.1:{http_port}/.well-known/acme-challenge/probe",
+                        timeout=5,
+                    ) as response:
+                        assert response.read() == b"repflow-http-01-test"
+                    break
+                except HTTPError:
+                    raise
+                except (OSError, http.client.HTTPException):
+                    if attempt == 9:
+                        raise
+                    time.sleep(0.25)
             manager.lineage.mkdir(parents=True)
             shutil.copyfile(root / "certificate.pem", manager.lineage / "fullchain.pem")
             shutil.copyfile(root / "key.pem", manager.lineage / "privkey.pem")
             (manager.lineage / "privkey.pem").chmod(0o600)
             manager.activate(recreate=True)
             original = verify()
-            for path in ("/health", STATUS_PATH, "/api/v1/auth/login"):
-                try:
-                    urlopen(f"http://127.0.0.1:{http_port}{path}", timeout=5)
-                except HTTPError as error:
-                    error.close()
-                    assert error.code == 404
-                else:
-                    raise AssertionError("plaintext route was exposed")
+            for path in (
+                "/health",
+                STATUS_PATH,
+                "/api/v1/auth/login",
+                "/api/v1/workouts",
+            ):
+                expect_route(f"http://127.0.0.1:{http_port}{path}", 404)
+            tls_context = ssl.create_default_context(cafile=root / "ca.pem")
+            for path, status in (
+                ("/api/v1/auth/login", 405),
+                ("/api/v1/workouts", 401),
+                ("/api/v1/unknown", 404),
+            ):
+                expect_route(
+                    f"https://127.0.0.1:{https_port}{path}", status, tls_context
+                )
+            identity = {
+                "run_id": 81,
+                "attempt": 2,
+                "commit": "1" * 40,
+                "digest": "sha256:" + "2" * 64,
+            }
+            candidate = manager.state / "status/deploy-81-2.json"
+            candidate.write_text(json.dumps(dict(identity, state="candidate")))
+            candidate.chmod(0o644)
+            path = status_path(81, 2)
+            expect_route(f"http://127.0.0.1:{http_port}{path}", 404)
+            assert (
+                status_of("127.0.0.1", https_port, identity, cafile=root / "ca.pem")
+                == "candidate"
+            )
+            assert (
+                status_of(
+                    "127.0.0.1",
+                    https_port,
+                    dict(identity, attempt=1),
+                    cafile=root / "ca.pem",
+                )
+                is None
+            )
 
             # 真实替换证书并验证 nginx 发出的指纹改变，覆盖 reload 链路。
             shutil.copyfile(root / "replacement.pem", manager.lineage / "fullchain.pem")
             manager.pending.touch()
-            manager.activate()
-            renewed = verify()
+            renewed = manager.validate_candidate()
             assert renewed != original
+            manager.activate()
+            expect_fingerprint(renewed)
             (manager.lineage / "fullchain.pem").write_text("invalid certificate")
             expect_rejected(manager.activate)
-            assert verify() == renewed
+            expect_fingerprint(renewed)
             shutil.copyfile(root / "replacement.pem", manager.lineage / "fullchain.pem")
 
             # 原子替换配置，预检应阻止重建；恢复配置后显式重建以完成回退。
@@ -138,14 +203,14 @@ def check():
             candidate.write_text(saved + "\ninvalid_repflow_directive;\n")
             candidate.replace(nginx)
             expect_rejected(lambda: manager.activate(recreate=True))
-            assert verify() == renewed
+            expect_fingerprint(renewed)
             candidate.write_text(saved)
             candidate.replace(nginx)
             manager.activate(recreate=True)
-            assert verify() == renewed
+            expect_fingerprint(renewed)
             command("restart", "nginx")
             manager.activate()
-            assert verify() == renewed
+            expect_fingerprint(renewed)
             manager.status(False)
             expect_rejected(verify)
             manager.activate()
