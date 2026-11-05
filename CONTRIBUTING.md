@@ -13,9 +13,13 @@
 | `release/vX.Y` | 阶段检查前冻结用 | 只修 bug，合入 `main` 和 `dev` |
 
 - `<模块>` 取值与提交信息的 scope 一致：`watch`、`ios`、`backend`、`web`、`ml`、`deploy`、`docs`。
-- `main` 和 `dev` 两个受保护分支由 ruleset `protect-dev-main` 保护：必须经过 PR、至少 1 名非作者批准、只允许 squash 合并、禁止强制推送和删除；密钥扫描 `gitleaks` 是必需检查。后端和 Apple 端 CI 带路径过滤，只在改动对应目录时运行，暂不设为必需，审查人需确认它们在相关 PR 上通过。
+- `main` 和 `dev` 由 ruleset `protect-dev-main` 保护，必须经过 PR、至少 1 名非作者批准、只允许 squash 合并，禁止强制推送和删除。当前必需检查为 `gitleaks`，Apple 与 Backend 门禁由组长验收后加入 ruleset。
 - PR 合入后源分支自动删除。
 - 任何人都不直接向 `main` 或 `dev` 推送。
+
+每个 PR 和合入队列都返回 `Apple CI gate`、`Backend CI gate` 和 `gitleaks`。Apple 完整检查覆盖 `apps/apple/`，Backend 完整检查覆盖 `backend/` 和 `deploy/`。修改相应工作流或共用路径判断脚本也会触发对应检查。纯文档改动的两个门禁会说明为何跳过完整检查，路径判断或测试失败时门禁失败。
+
+组长先用纯文档 PR 和代码 PR 确认 GitHub Actions 上报的门禁名称，再用单独针对 `dev` 的 ruleset 加入两个必需检查并启用 squash 合入队列。用进入队列后的运行确认三项检查都返回结果。`main` 在发布分支带齐工作流后按同样步骤配置。紧急通道仍按团队章程执行。
 
 ## 2. 提交信息
 
@@ -46,6 +50,7 @@
   - 「完成的定义」勾选项
 - 至少 1 名非作者成员批准后才能合入。可以用另一个 AI 工具出第二意见，但批准必须由人点。
 - **作者在 PR 转为 Ready for review 时开启自动合入**（还有提交没推完的 PR 保持 Draft，见 AGENTS.md 第 8 节；PR 页面的 Enable auto-merge，或 `gh pr merge <编号> --auto --squash`），非作者批准且必需检查通过后自动 squash 合入，不需要再有人手动合并。组长开的 PR 同样适用。合入始终排在非作者批准之后，审查记录以批准为准，与谁开启自动合入无关。
+- 启用合入队列的分支使用 PR 页面的入队操作，或 `gh pr merge <编号> --auto`。squash 方式由队列配置决定，队列也会检查合成提交。
 - **例外：改动接口契约文件（见 AGENTS.md 第 5 节）的 PR，开 PR 时不开启自动合入。** 作者在 PR 描述里列出所有受影响模块的负责人，并请他们审查。等除作者本人以外的负责人都批准后，再由作者开启自动合入。作者本人就是受影响模块负责人时，算作已确认。
 - 审查人重点看：
   - 是否符合接口契约和本规范
@@ -114,7 +119,7 @@ common_dir=$(git rev-parse --git-common-dir)
   --log-opts="--full-history -m HEAD" .
 ```
 
-每个 PR 及 `dev`/`main` 的推送运行相同 CLI 历史扫描；本地钩子不能代替 CI。
+每个 PR、合入队列及 `dev`/`main` 的推送运行相同 CLI 历史扫描；本地钩子不能代替 CI。
 可执行 `sh scripts/test-git-hooks.sh` 在临时仓库中验证正常提交、暂存区拦截、
 脱敏、缺少工具/配置错误、已有钩子保护，以及中间提交和合并提交的历史检测。
 Secret scanning 和 Push protection 由管理员在 GitHub 设置中启用并在 #31 确认。

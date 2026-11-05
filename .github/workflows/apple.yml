@@ -2,10 +2,11 @@ name: Apple
 
 on:
   pull_request:
-    paths: ["apps/apple/**", ".github/workflows/apple.yml"]
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [dev, main]
-    paths: ["apps/apple/**", ".github/workflows/apple.yml"]
+    paths: ["apps/apple/**", ".github/workflows/apple.yml", "scripts/ci_scope.py", "scripts/test_ci_scope.py"]
 
 permissions:
   contents: read
@@ -15,8 +16,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      required: ${{ steps.scope.outputs.required }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 -m unittest discover -s scripts -p test_ci_scope.py
+      - id: scope
+        run: python3 scripts/ci_scope.py apple
+
   checks:
     name: Apple checks
+    needs: scope
+    if: needs.scope.outputs.required == 'true'
     runs-on: xcode-27
     timeout-minutes: 30
     env:
@@ -67,3 +84,21 @@ jobs:
             printf 'Passed: strict formatting, iOS app with embedded Watch app build, and both XCTest schemes.\n\n'
             printf 'Minimum-version physical-device validation remains separate.\n'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  gate:
+    name: Apple CI gate
+    if: ${{ always() }}
+    needs: [scope, checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - env:
+          SCOPE: ${{ needs.scope.result }}
+          REQUIRED: ${{ needs.scope.outputs.required }}
+          CHECKS: ${{ needs.checks.result }}
+        run: |
+          case "$SCOPE/$REQUIRED/$CHECKS" in
+            success/true/success) echo 'Apple checks passed.' ;;
+            success/false/skipped) echo 'No Apple changes in the checked commit.' ;;
+            *) echo 'Apple CI is incomplete or failed.' >&2; exit 1 ;;
+          esac
