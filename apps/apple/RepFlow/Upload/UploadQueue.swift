@@ -61,14 +61,18 @@ final class UploadQueue: ObservableObject {
     private func sendAll(of userID: UUID) async {
         guard let api else { return }
         var retries = 0
+        var lastSent: SentTask?
         while accounts.current?.userID == userID, let token = accounts.token(for: userID),
             let task = nextTask(of: userID)
         {
             let sent = SentTask(task)
+            // 退避次数按任务算：换了任务（前一个被拒收或被新版本覆盖）就重新计，
+            // 否则后面的任务会少试几次
+            if sent != lastSent { retries = 0 }
+            lastSent = sent
             switch await send(sent, api: api, token: token) {
             case .accepted:
                 complete(sent)
-                retries = 0
             case .authExpired:
                 logger.warning("upload unauthorized: user=\(userID), workout=\(sent.workoutID)")
                 accounts.expireToken(token, for: userID)
@@ -78,6 +82,8 @@ final class UploadQueue: ObservableObject {
                 // 409/410/422 等：原样重发结果不会变，也不能抬高 revision 覆盖，停下等用户处理
                 recordFailure(of: sent, code: code, state: .rejected)
             case .transient(let code):
+                // 在途时被新版本覆盖：旧版本不用再试，也不用等，直接发新版本
+                guard current(sent) != nil else { continue }
                 guard retries < retryDelays.count else {
                     recordFailure(of: sent, code: code, state: .failed)
                     // 多半是网络或服务端暂时不可用，本轮不再试后面的任务
@@ -129,6 +135,8 @@ final class UploadQueue: ObservableObject {
             // 确认版本只增不减；途中改出的新版本仍待同步，由它自己的任务负责
             if let workout = workout(sent.workoutID, of: sent.userID) {
                 workout.confirmedRevision = max(workout.confirmedRevision ?? 0, sent.revision)
+                // 之前用完重试标过失败、后来自动触发发成功了，失败标记要撤掉
+                if workout.isSynced { workout.uploadState = .pending }
             }
         case .delete:
             let workoutID = sent.workoutID
@@ -208,7 +216,7 @@ final class UploadQueue: ObservableObject {
 }
 
 /// 发出时的任务副本。在途期间任务可能被新版本覆盖，回执按这份去认领。
-private struct SentTask {
+private struct SentTask: Equatable {
     let userID: UUID
     let workoutID: UUID
     let revision: Int32

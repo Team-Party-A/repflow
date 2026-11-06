@@ -178,6 +178,56 @@ final class UploadQueueTests: XCTestCase {
         XCTAssertEqual(Set(StubURLProtocol.requests.map(\.httpBody)), Set<Data?>([snapshot]))
         XCTAssertTrue(try tasks().isEmpty)
         XCTAssertEqual(workout.confirmedRevision, 1)
+        // 自动触发发成功后撤掉失败标记
+        XCTAssertEqual(workout.uploadState, .pending)
+    }
+
+    func testRetriesAreCountedPerTask() async throws {
+        let rejected = try createWorkout(for: userA)
+        let next = try createWorkout(for: userA)
+        // 前一个任务用掉 2 次重试后被拒收；后一个任务仍有完整的 2 次重试
+        StubURLProtocol.handler = { request in
+            let isRejected =
+                request.url!.lastPathComponent == rejected.workoutID.uuidString.lowercased()
+            let count = StubURLProtocol.requests.count
+            if isRejected {
+                return count < 3
+                    ? (503, errorBody("SERVICE_UNAVAILABLE"))
+                    : (409, errorBody("REVISION_CONFLICT"))
+            }
+            return count < 6 ? (503, errorBody("SERVICE_UNAVAILABLE")) : accepted(request)
+        }
+
+        await queue.run(userID: userA)
+
+        XCTAssertEqual(StubURLProtocol.requests.count, 6)
+        XCTAssertEqual(try tasks().map(\.workoutID), [rejected.workoutID])
+        XCTAssertTrue(next.isSynced)
+    }
+
+    func testEditDuringLastRetrySendsNewRevisionInSameRound() async throws {
+        let store = WorkoutStore(context: context, userID: userA)
+        let workout = try createWorkout(for: userA)
+        // revision 1 的最后一次重试在途时用户改了一版，这次也失败了
+        StubURLProtocol.handler = { request in
+            let count = StubURLProtocol.requests.count
+            if count == 3 {
+                DispatchQueue.main.sync {
+                    MainActor.assumeIsolated { try! store.update(workout) { $0.endedAt = Date() } }
+                }
+            }
+            return count <= 3 ? (503, errorBody("SERVICE_UNAVAILABLE")) : accepted(request)
+        }
+
+        await queue.run(userID: userA)
+
+        // revision 2 本轮就发出，不因旧版本用完重试而停下
+        let revisions = try StubURLProtocol.requests.map {
+            try json($0.httpBody)["revision"] as? Int
+        }
+        XCTAssertEqual(revisions, [1, 1, 1, 2])
+        XCTAssertTrue(workout.isSynced)
+        XCTAssertTrue(try tasks().isEmpty)
     }
 
     func testOnlyCurrentAccountsTasksAreSentWithItsOwnToken() async throws {
