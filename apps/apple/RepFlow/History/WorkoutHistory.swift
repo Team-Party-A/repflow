@@ -25,6 +25,26 @@ extension Workout {
     }
 }
 
+/// 同步失败横幅的说明。UI 规范 7.2：网络类失败提供重试；被后端拒收的按错误码说明原因，
+/// 输入错误引导去修改。拒收后仍保留「重试」：后端修好或更新动作字典后，同一份快照可能被接受。
+enum FailureHint {
+    static func detail(state: UploadTaskState?, errorCode: String?) -> String {
+        guard state == .rejected else { return "网络或服务器暂时不可用，可以点重试" }
+        switch errorCode {
+        case "VALIDATION_ERROR":
+            return "内容不符合要求，后端没有接受。请修改有问题的组后重新保存"
+        case "REVISION_CONFLICT":
+            return "后端已有这次训练的其他版本，本机修改没有覆盖它"
+        case "SET_ID_CONFLICT":
+            return "有组和你的另一次训练重复，后端没有接受"
+        case "WORKOUT_DELETED":
+            return "这次训练已在后端删除，不能再恢复上传"
+        default:
+            return "后端没有接受这次训练，可以修改后重新保存"
+        }
+    }
+}
+
 enum ExerciseName {
     /// 清单里没有的动作键保留原样显示，不猜名称
     static func of(_ exerciseID: String) -> String {

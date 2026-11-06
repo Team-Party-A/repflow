@@ -129,6 +129,20 @@ final class HistoryTests: XCTestCase {
 
     // MARK: 状态与文案
 
+    func testFailureHintDistinguishesRejectionFromNetworkFailure() {
+        XCTAssertEqual(
+            FailureHint.detail(state: .failed, errorCode: "VALIDATION_ERROR"),
+            "网络或服务器暂时不可用，可以点重试")
+        XCTAssertTrue(
+            FailureHint.detail(state: .rejected, errorCode: "VALIDATION_ERROR").contains("请修改"))
+        XCTAssertTrue(
+            FailureHint.detail(state: .rejected, errorCode: "WORKOUT_DELETED").contains("已在后端删除"))
+        XCTAssertTrue(
+            FailureHint.detail(state: .rejected, errorCode: "REVISION_CONFLICT").contains("其他版本"))
+        XCTAssertTrue(
+            FailureHint.detail(state: .rejected, errorCode: "SET_ID_CONFLICT").contains("重复"))
+    }
+
     func testSyncStatusFollowsConfirmedRevisionAndFailure() throws {
         let workout = try create(in: store(for: userA))
         XCTAssertEqual(workout.syncStatus, .pending)

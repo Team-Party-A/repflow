@@ -13,6 +13,8 @@ struct WorkoutDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var uploads: UploadQueue
     @Query private var matches: [Workout]
+    /// 一条训练最多一个待发任务，失败原因从这里取
+    @Query private var tasks: [UploadTask]
     @State private var sheet: SetSheet?
     @State private var isConfirmingDelete = false
     @State private var errorMessage: String?
@@ -33,6 +35,8 @@ struct WorkoutDetailView: View {
         self.userID = userID
         _matches = Query(
             filter: #Predicate<Workout> { $0.workoutID == workoutID && $0.userID == userID })
+        _tasks = Query(
+            filter: #Predicate<UploadTask> { $0.workoutID == workoutID && $0.userID == userID })
     }
 
     var body: some View {
@@ -107,8 +111,12 @@ struct WorkoutDetailView: View {
         let (title, detail) =
             switch status {
             case .pending: ("已保存到手机 · 待同步", "联网后自动上传，可以继续查看和修改")
-            // 被后端拒收的任务不会自动重发，这里不承诺「自动重试」，两种失败都成立
-            case .failed: ("同步失败 · 本地记录已保留", "可以点重试，或修改后重新保存")
+            case .failed:
+                (
+                    "同步失败 · 本地记录已保留",
+                    FailureHint.detail(
+                        state: tasks.first?.state, errorCode: tasks.first?.lastErrorCode)
+                )
             case .synced: ("已同步", "后端已保存这次训练的当前版本")
             }
         HStack(spacing: 10) {
