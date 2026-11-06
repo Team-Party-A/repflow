@@ -154,4 +154,20 @@ final class HistoryTests: XCTestCase {
         XCTAssertEqual(header(daysAgo: 1), "昨天")
         XCTAssertEqual(header(daysAgo: 4), "10月16日 周五")
     }
+
+    /// 时长四舍五入到分钟，与原型一致；截断会把 42 分 40 秒显示成 42 分钟
+    func testDurationRoundsToNearestMinute() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let start = try XCTUnwrap(
+            calendar.date(
+                from: DateComponents(
+                    year: 2026, month: 10, day: 20, hour: 18, minute: 30, second: 10)
+            ))
+        let workout = try create(in: store(for: userA), startedAt: start)
+        workout.endedAt = start.addingTimeInterval(42 * 60 + 40)
+
+        XCTAssertEqual(
+            HistoryFormat.timeSpan(of: workout, calendar: calendar), "18:30 – 19:12 · 43 分钟")
+    }
 }

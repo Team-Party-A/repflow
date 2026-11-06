@@ -107,7 +107,8 @@ struct WorkoutDetailView: View {
         let (title, detail) =
             switch status {
             case .pending: ("已保存到手机 · 待同步", "联网后自动上传，可以继续查看和修改")
-            case .failed: ("同步失败 · 本地记录已保留", "网络恢复后会自动重试")
+            // 被后端拒收的任务不会自动重发，这里不承诺「自动重试」，两种失败都成立
+            case .failed: ("同步失败 · 本地记录已保留", "可以点重试，或修改后重新保存")
             case .synced: ("已同步", "后端已保存这次训练的当前版本")
             }
         HStack(spacing: 10) {

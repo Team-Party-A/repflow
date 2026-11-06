@@ -55,7 +55,7 @@ enum HistoryFormat {
         return days == 0 ? "今天" : days == 1 ? "昨天" : nil
     }
 
-    /// 列表里按天分组的标题：今天、昨天、10月16日 周四
+    /// 列表里按天分组的标题：今天、昨天、10月16日 周五
     static func dayHeader(_ date: Date, now: Date = Date(), calendar: Calendar = .current)
         -> String
     {
@@ -68,7 +68,7 @@ enum HistoryFormat {
     static func timeSpan(of workout: Workout, calendar: Calendar = .current) -> String {
         let start = time(workout.startedAt, calendar: calendar)
         if let endedAt = workout.endedAt {
-            let minutes = Int(endedAt.timeIntervalSince(workout.startedAt) / 60)
+            let minutes = Int((endedAt.timeIntervalSince(workout.startedAt) / 60).rounded())
             if minutes > 0 {
                 return "\(start) – \(time(endedAt, calendar: calendar)) · \(minutes) 分钟"
             }
