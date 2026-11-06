@@ -63,7 +63,7 @@ struct APIClient {
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
-            throw APIError.badResponse(status: 200)
+            throw APIError.undecodable
         }
     }
 }
@@ -99,6 +99,8 @@ enum APIError: Error, LocalizedError {
     /// 契约错误体；`code` 是 INVALID_CREDENTIALS 之类的枚举值
     case server(status: Int, code: String, message: String)
     case badResponse(status: Int)
+    /// 2xx 但正文不符合契约；成功码有 200 也有 201，不报具体状态码
+    case undecodable
 
     var errorDescription: String? {
         switch self {
@@ -115,6 +117,8 @@ enum APIError: Error, LocalizedError {
             return message
         case .badResponse(let status):
             return "服务器响应异常（HTTP \(status)）"
+        case .undecodable:
+            return "服务器响应异常，请稍后重试"
         }
     }
 }
