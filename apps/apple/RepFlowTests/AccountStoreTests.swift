@@ -44,6 +44,7 @@ final class AccountStoreTests: XCTestCase {
     private let userB = UUID()
     private let keychain = TokenKeychain(service: "repflow.access-token.tests")
     private var defaults: UserDefaults!
+    private var container: ModelContainer!
     private var store: AccountStore!
 
     override func setUp() async throws {
@@ -55,7 +56,9 @@ final class AccountStoreTests: XCTestCase {
         let api = APIClient(
             baseURL: URL(string: "https://api.example.invalid:8080")!,
             session: URLSession(configuration: configuration))
-        store = AccountStore(api: api, keychain: keychain, defaults: defaults)
+        container = try WorkoutStore.makeContainer(inMemory: true)
+        store = AccountStore(
+            api: api, context: container.mainContext, keychain: keychain, defaults: defaults)
     }
 
     override func tearDown() async throws {
@@ -95,11 +98,13 @@ final class AccountStoreTests: XCTestCase {
         let sent = try JSONSerialization.jsonObject(with: request.httpBody!) as? [String: String]
         XCTAssertEqual(sent, ["username": "alice", "password": "correct horse battery"])
 
-        XCTAssertEqual(store.current, Account(userID: userA, username: "alice"))
+        XCTAssertEqual(store.current?.userID, userA)
+        XCTAssertEqual(store.current?.username, "alice")
         XCTAssertEqual(keychain.token(for: userA), "token-a")
         XCTAssertNil(keychain.token(for: userB))
         // 杀掉重开仍是登录态
-        let relaunched = AccountStore(api: nil, keychain: keychain, defaults: defaults)
+        let relaunched = AccountStore(
+            api: nil, context: container.mainContext, keychain: keychain, defaults: defaults)
         XCTAssertEqual(relaunched.current?.userID, userA)
         // 密码不落盘
         let persisted = "\(defaults.dictionaryRepresentation())"
@@ -154,7 +159,6 @@ final class AccountStoreTests: XCTestCase {
 
     func testLogoutKeepsRecordsAndSwitchedAccountSeesOnlyItsOwn() async throws {
         stubServer()
-        let container = try WorkoutStore.makeContainer(inMemory: true)
         func workouts() throws -> [Workout] {
             let userID = try XCTUnwrap(store.current?.userID)
             return try WorkoutStore(context: ModelContext(container), userID: userID).workouts()
@@ -184,6 +188,27 @@ final class AccountStoreTests: XCTestCase {
         await store.logout()
         try await store.login(username: "alice", password: "correct horse battery")
         XCTAssertEqual(try workouts().map(\.userID), [userA])
+    }
+
+    func testLogoutKeepsAccountRecordForPrefill() async throws {
+        stubServer()
+        try await store.login(username: "alice", password: "correct horse battery")
+        await store.logout()
+        try await store.login(username: "bob", password: "another long passphrase")
+        await store.logout()
+
+        // 数据库设计 §5：退出不删账号记录，同一账号多次登录也只有一条
+        try await store.login(username: "alice", password: "correct horse battery")
+        await store.logout()
+        let accounts = try container.mainContext.fetch(FetchDescriptor<Account>())
+        XCTAssertEqual(Set(accounts.map(\.username)), ["alice", "bob"])
+        XCTAssertEqual(accounts.count, 2)
+
+        // 重开 App：没有 token 不算登录，但登录页能预填上次的用户名
+        let relaunched = AccountStore(
+            api: nil, context: container.mainContext, keychain: keychain, defaults: defaults)
+        XCTAssertNil(relaunched.current)
+        XCTAssertEqual(relaunched.lastAccount()?.username, "alice")
     }
 
     func testLogoutCompletesLocallyWhenRevokeFails() async throws {

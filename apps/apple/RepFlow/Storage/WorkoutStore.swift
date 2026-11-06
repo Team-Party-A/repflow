@@ -9,7 +9,7 @@ struct WorkoutStore {
 
     static func makeContainer(inMemory: Bool = false) throws -> ModelContainer {
         try ModelContainer(
-            for: Workout.self, WorkoutSet.self,
+            for: Workout.self, WorkoutSet.self, Account.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory))
     }
 

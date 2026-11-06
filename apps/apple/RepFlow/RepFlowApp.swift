@@ -5,15 +5,21 @@ import SwiftUI
 struct RepFlowApp: App {
     // 后台文件投递可能不创建窗口，连接随 App 初始化，不能等视图出现。
     private let transfer = RecordingTransfer.shared
-    @StateObject private var accounts = AccountStore(api: APIClient.configured())
-    private let container: ModelContainer = {
+    private let container: ModelContainer
+    @StateObject private var accounts: AccountStore
+
+    init() {
+        let container: ModelContainer
         do {
-            return try WorkoutStore.makeContainer()
+            container = try WorkoutStore.makeContainer()
         } catch {
             // 本地库打不开时继续运行只会让记录静默丢失，直接终止并留下原因
             fatalError("open local workout store failed: \(error)")
         }
-    }()
+        self.container = container
+        _accounts = StateObject(
+            wrappedValue: AccountStore(api: APIClient.configured(), context: container.mainContext))
+    }
 
     var body: some Scene {
         WindowGroup {

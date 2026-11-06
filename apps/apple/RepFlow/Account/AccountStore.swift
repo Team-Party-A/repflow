@@ -1,13 +1,8 @@
 import Foundation
+import SwiftData
 import os
 
 private let logger = Logger(subsystem: "repflow", category: "account")
-
-/// 本机当前登录的账号。界面按 `current.userID` 读写训练；token 在 Keychain，这里只记是谁。
-struct Account: Codable, Equatable {
-    let userID: UUID
-    let username: String
-}
 
 /// 注册、登录、退出，以及「当前登录账号」的唯一来源。
 @MainActor
@@ -16,24 +11,34 @@ final class AccountStore: ObservableObject {
 
     /// nil 表示本机构建没配后端地址
     private let api: APIClient?
+    private let context: ModelContext
     private let keychain: TokenKeychain
     private let defaults: UserDefaults
-    private static let currentKey = "currentAccount"
+    /// 最近一次登录的账号。退出不清：有 token 就是当前账号，没有就只用来预填用户名
+    private static let lastUserKey = "lastUserID"
 
     init(
-        api: APIClient?, keychain: TokenKeychain = TokenKeychain(),
+        api: APIClient?, context: ModelContext, keychain: TokenKeychain = TokenKeychain(),
         defaults: UserDefaults = .standard
     ) {
         self.api = api
+        self.context = context
         self.keychain = keychain
         self.defaults = defaults
-        // 杀掉重开不用重新登录；token 不在了（例如被系统清掉）就当未登录
-        if let data = defaults.data(forKey: Self.currentKey),
-            let saved = try? JSONDecoder().decode(Account.self, from: data),
-            keychain.token(for: saved.userID) != nil
-        {
-            current = saved
+        // 杀掉重开不用重新登录；token 不在了（退出、401 或被系统清掉）就当未登录
+        if let last = lastAccount(), keychain.token(for: last.userID) != nil {
+            current = last
         }
+    }
+
+    /// 登录页预填用户名用
+    func lastAccount() -> Account? {
+        guard let raw = defaults.string(forKey: Self.lastUserKey),
+            let userID = UUID(uuidString: raw)
+        else { return nil }
+        return try? context.fetch(
+            FetchDescriptor<Account>(predicate: #Predicate { $0.userID == userID })
+        ).first
     }
 
     func register(username: String, password: String) async throws {
@@ -45,13 +50,12 @@ final class AccountStore: ObservableObject {
         try signIn(with: await client().login(Credentials(username: username, password: password)))
     }
 
-    /// D-31：只清 token 和当前账号，本地训练一条不删，同账号再登录还能看到并续传。
+    /// D-31：只清 token，本地训练和 Account 记录一条不删，同账号再登录还能看到并续传。
     /// 先在本地退出再通知后端，离线或请求失败也不拦住用户（契约允许，旧 token 可能有效至到期）。
     func logout() async {
         guard let account = current else { return }
         let token = keychain.token(for: account.userID)
         keychain.delete(for: account.userID)
-        defaults.removeObject(forKey: Self.currentKey)
         current = nil
         logger.info("logged out locally: user=\(account.userID)")
 
@@ -88,8 +92,19 @@ final class AccountStore: ObservableObject {
 
     private func signIn(with result: AuthResult) throws {
         try keychain.save(result.accessToken, for: result.userID)
-        let account = Account(userID: result.userID, username: result.username)
-        defaults.set(try JSONEncoder().encode(account), forKey: Self.currentKey)
+        let userID = result.userID
+        let account: Account
+        if let existing = try context.fetch(
+            FetchDescriptor<Account>(predicate: #Predicate { $0.userID == userID })
+        ).first {
+            account = existing
+            account.username = result.username
+        } else {
+            account = Account(userID: userID, username: result.username)
+            context.insert(account)
+        }
+        try context.save()
+        defaults.set(userID.uuidString, forKey: Self.lastUserKey)
         current = account
         logger.info("signed in: user=\(result.userID)")
     }

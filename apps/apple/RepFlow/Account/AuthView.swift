@@ -64,6 +64,10 @@ struct AuthView: View {
         .padding(.top, 70)
         .pageBackground()
         .onSubmit(submit)
+        // 退出或登录失效后回到这里，多半是同一个人要重新登录
+        .onAppear {
+            if username.isEmpty { username = accounts.lastAccount()?.username ?? "" }
+        }
     }
 
     private func field(_ label: String, @ViewBuilder input: () -> some View) -> some View {

@@ -112,3 +112,16 @@ final class WorkoutSet {
         SetRecordSource(rawValue: recordSourceRaw) ?? .manual
     }
 }
+
+/// 本机登录过的账号，见 `docs/design/数据库设计.md` 第 5 节。token 不在这里，在 Keychain。
+/// 退出不删：退出或 token 失效后，本机仍知道留下的记录属于哪个用户名，重新登录时能预填。
+@Model
+final class Account {
+    @Attribute(.unique) var userID: UUID
+    var username: String
+
+    init(userID: UUID, username: String) {
+        self.userID = userID
+        self.username = username
+    }
+}
