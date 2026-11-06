@@ -38,6 +38,17 @@ def expect_rejected(operation):
     raise AssertionError("invalid candidate or failed status was accepted")
 
 
+def expect_fingerprint(verify, expected):
+    # nginx 热加载时旧 worker 可能短暂继续完成 TLS 握手。
+    deadline = time.monotonic() + 10
+    while True:
+        actual = verify()
+        if actual == expected:
+            return
+        assert time.monotonic() < deadline, (actual, expected)
+        time.sleep(0.25)
+
+
 def check():
     source = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory(prefix="repflow-https-check-") as temporary:
@@ -94,16 +105,6 @@ def check():
 
         def verify():
             return probe("127.0.0.1", https_port, cafile=root / "ca.pem")
-
-        def expect_fingerprint(expected):
-            # nginx 热加载时旧 worker 可能短暂继续完成 TLS 握手。
-            deadline = time.monotonic() + 10
-            while True:
-                actual = verify()
-                if actual == expected:
-                    return
-                assert time.monotonic() < deadline, (actual, expected)
-                time.sleep(0.25)
 
         def expect_route(url, status, context=None):
             try:
@@ -185,15 +186,18 @@ def check():
             )
 
             # 真实替换证书并验证 nginx 发出的指纹改变，覆盖 reload 链路。
-            shutil.copyfile(root / "replacement.pem", manager.lineage / "fullchain.pem")
+            # 模拟 Certbot 切换到新文件。原地覆盖可能让 nginx 沿用旧证书缓存。
+            next_certificate = manager.lineage / "fullchain.next.pem"
+            shutil.copyfile(root / "replacement.pem", next_certificate)
+            next_certificate.replace(manager.lineage / "fullchain.pem")
             manager.pending.touch()
             renewed = manager.validate_candidate()
             assert renewed != original
             manager.activate()
-            expect_fingerprint(renewed)
+            expect_fingerprint(verify, renewed)
             (manager.lineage / "fullchain.pem").write_text("invalid certificate")
             expect_rejected(manager.activate)
-            expect_fingerprint(renewed)
+            expect_fingerprint(verify, renewed)
             shutil.copyfile(root / "replacement.pem", manager.lineage / "fullchain.pem")
 
             # 原子替换配置，预检应阻止重建；恢复配置后显式重建以完成回退。
@@ -203,14 +207,14 @@ def check():
             candidate.write_text(saved + "\ninvalid_repflow_directive;\n")
             candidate.replace(nginx)
             expect_rejected(lambda: manager.activate(recreate=True))
-            expect_fingerprint(renewed)
+            expect_fingerprint(verify, renewed)
             candidate.write_text(saved)
             candidate.replace(nginx)
             manager.activate(recreate=True)
-            expect_fingerprint(renewed)
+            expect_fingerprint(verify, renewed)
             command("restart", "nginx")
             manager.activate()
-            expect_fingerprint(renewed)
+            expect_fingerprint(verify, renewed)
             manager.status(False)
             expect_rejected(verify)
             manager.activate()
