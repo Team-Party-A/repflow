@@ -24,10 +24,14 @@ struct WorkoutStore {
         #Predicate { $0.userID == userID }
     }
 
+    /// 历史列表的顺序：开始时间倒序；页面的 @Query 和 `workouts()` 共用
+    nonisolated static func newestFirst() -> [SortDescriptor<Workout>] {
+        [SortDescriptor(\.startedAt, order: .reverse)]
+    }
+
     func workouts() throws -> [Workout] {
         let descriptor = FetchDescriptor<Workout>(
-            predicate: Self.owned(by: userID),
-            sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
+            predicate: Self.owned(by: userID), sortBy: Self.newestFirst())
         return try context.fetch(descriptor)
     }
 
@@ -73,6 +77,32 @@ struct WorkoutStore {
                     endHandoffReceived: workout.endHandoffReceived))
             try enqueue(.delete, workoutID: workout.workoutID, revision: revision, snapshot: nil)
             context.delete(workout)
+        }
+    }
+
+    /// 修正一组的动作、次数或重量。三项都没变就什么都不写：revision 只在内容真正变化时加 1，
+    /// 否则用户点开又保存会让后端多收一个版本
+    func updateSet(_ set: WorkoutSet, in workout: Workout, to draft: DraftSet) throws {
+        guard
+            set.exerciseID != draft.exerciseID || set.finalRepCount != draft.reps
+                || set.weightGrams != draft.weightGrams
+        else { return }
+        try update(workout) { _ in
+            set.exerciseID = draft.exerciseID
+            set.finalRepCount = draft.reps
+            set.weightGrams = draft.weightGrams
+        }
+    }
+
+    /// 在详情页补一组，排在最后；删组留下的空号不用补，展示按 position 排序
+    func addSet(_ draft: DraftSet, to workout: Workout) throws {
+        try update(workout) { edited in
+            let set = WorkoutSet(
+                position: (edited.sets.map(\.position).max() ?? 0) + 1,
+                exerciseID: draft.exerciseID, finalRepCount: draft.reps, recordSource: .manual,
+                weightGrams: draft.weightGrams)
+            context.insert(set)
+            set.workout = edited
         }
     }
 
