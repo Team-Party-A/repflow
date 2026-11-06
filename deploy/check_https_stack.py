@@ -1,5 +1,6 @@
 """可丢弃 Compose 项目的 HTTPS 验收；只生成测试证书，不访问 ACME。"""
 
+import http.client
 import json
 import logging
 import os
@@ -7,6 +8,7 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import urlopen
@@ -32,6 +34,17 @@ def expect_rejected(operation):
         logger.info("Invalid candidate or failed status was correctly rejected")
         return
     raise AssertionError("invalid candidate or failed status was accepted")
+
+
+def expect_fingerprint(verify, expected):
+    # nginx 热加载时旧 worker 可能短暂继续完成 TLS 握手。
+    deadline = time.monotonic() + 10
+    while True:
+        actual = verify()
+        if actual == expected:
+            return
+        assert time.monotonic() < deadline, (actual, expected)
+        time.sleep(0.25)
 
 
 def check():
@@ -100,11 +113,20 @@ def check():
             challenge = manager.state / "webroot/.well-known/acme-challenge/probe"
             challenge.parent.mkdir(parents=True, exist_ok=True)
             challenge.write_text("repflow-http-01-test")
-            with urlopen(
-                f"http://127.0.0.1:{http_port}/.well-known/acme-challenge/probe",
-                timeout=5,
-            ) as response:
-                assert response.read() == b"repflow-http-01-test"
+            for attempt in range(10):
+                try:
+                    with urlopen(
+                        f"http://127.0.0.1:{http_port}/.well-known/acme-challenge/probe",
+                        timeout=5,
+                    ) as response:
+                        assert response.read() == b"repflow-http-01-test"
+                    break
+                except HTTPError:
+                    raise
+                except (OSError, http.client.HTTPException):
+                    if attempt == 9:
+                        raise
+                    time.sleep(0.25)
             manager.lineage.mkdir(parents=True)
             shutil.copyfile(root / "certificate.pem", manager.lineage / "fullchain.pem")
             shutil.copyfile(root / "key.pem", manager.lineage / "privkey.pem")
@@ -121,14 +143,18 @@ def check():
                     raise AssertionError("plaintext route was exposed")
 
             # 真实替换证书并验证 nginx 发出的指纹改变，覆盖 reload 链路。
-            shutil.copyfile(root / "replacement.pem", manager.lineage / "fullchain.pem")
+            # 模拟 Certbot 切换到新文件。原地覆盖可能让 nginx 沿用旧证书缓存。
+            next_certificate = manager.lineage / "fullchain.next.pem"
+            shutil.copyfile(root / "replacement.pem", next_certificate)
+            next_certificate.replace(manager.lineage / "fullchain.pem")
             manager.pending.touch()
-            manager.activate()
-            renewed = verify()
+            renewed = manager.validate_candidate()
             assert renewed != original
+            manager.activate()
+            expect_fingerprint(verify, renewed)
             (manager.lineage / "fullchain.pem").write_text("invalid certificate")
             expect_rejected(manager.activate)
-            assert verify() == renewed
+            expect_fingerprint(verify, renewed)
             shutil.copyfile(root / "replacement.pem", manager.lineage / "fullchain.pem")
 
             # 原子替换配置，预检应阻止重建；恢复配置后显式重建以完成回退。
@@ -138,14 +164,14 @@ def check():
             candidate.write_text(saved + "\ninvalid_repflow_directive;\n")
             candidate.replace(nginx)
             expect_rejected(lambda: manager.activate(recreate=True))
-            assert verify() == renewed
+            expect_fingerprint(verify, renewed)
             candidate.write_text(saved)
             candidate.replace(nginx)
             manager.activate(recreate=True)
-            assert verify() == renewed
+            expect_fingerprint(verify, renewed)
             command("restart", "nginx")
             manager.activate()
-            assert verify() == renewed
+            expect_fingerprint(verify, renewed)
             manager.status(False)
             expect_rejected(verify)
             manager.activate()
