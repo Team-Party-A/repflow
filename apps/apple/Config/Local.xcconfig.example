@@ -7,3 +7,7 @@ DEVELOPMENT_TEAM = ABCDE12345
 
 // 以点开头，只用小写字母和数字，例如 .wensharre
 BUNDLE_ID_SUFFIX = .yourname
+
+// 后端地址：只写 https://主机:端口，不带 /api/v1。xcconfig 会把 // 当注释，
+// 所以中间插一个空变量 $() 把两个斜杠隔开，构建后展开为 https://example.invalid:8080
+REPFLOW_API_BASE_URL = https:/$()/example.invalid:8080
