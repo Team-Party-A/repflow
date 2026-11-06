@@ -8,6 +8,8 @@ private let logger = Logger(subsystem: "repflow", category: "account")
 @MainActor
 final class AccountStore: ObservableObject {
     @Published private(set) var current: Account?
+    /// 当前账号的 token 在上传时被后端判定失效（401），需要重新登录才能继续同步
+    @Published private(set) var isSessionExpired = false
 
     /// nil 表示本机构建没配后端地址
     private let api: APIClient?
@@ -57,6 +59,7 @@ final class AccountStore: ObservableObject {
         let token = keychain.token(for: account.userID)
         keychain.delete(for: account.userID)
         current = nil
+        isSessionExpired = false
         logger.info("logged out locally: user=\(account.userID)")
 
         guard let api, let token else { return }
@@ -71,6 +74,16 @@ final class AccountStore: ObservableObject {
     /// 上传只能用记录归属账号的 token，不能拿当前账号的去传别人的记录
     func token(for userID: UUID) -> String? {
         keychain.token(for: userID)
+    }
+
+    /// 上传收到 401 时调用：删掉失效的 token，免得后续请求反复带着它；记录和任务都不动，
+    /// 同账号重新登录拿到新 token 后继续上传
+    func expireToken(_ token: String, for userID: UUID) {
+        // 请求在途时可能已经重新登录换了新 token，旧 token 的 401 不能把新的也删掉
+        guard keychain.token(for: userID) == token else { return }
+        keychain.delete(for: userID)
+        if current?.userID == userID { isSessionExpired = true }
+        logger.warning("token rejected by server, needs relogin: user=\(userID)")
     }
 
     /// 注册时按契约先在本地拦下必然 422 的输入，提示更具体；登录只查非空，其余由后端判定
@@ -106,6 +119,7 @@ final class AccountStore: ObservableObject {
         try context.save()
         defaults.set(userID.uuidString, forKey: Self.lastUserKey)
         current = account
+        isSessionExpired = false
         logger.info("signed in: user=\(result.userID)")
     }
 }

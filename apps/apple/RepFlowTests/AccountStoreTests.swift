@@ -28,6 +28,11 @@ final class StubURLProtocol: URLProtocol {
         }
         Self.requests.append(request)
         let (status, data) = Self.handler?(request) ?? (500, Data())
+        // 状态码给负数表示连不上服务器
+        guard status >= 0 else {
+            client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+            return
+        }
         let response = HTTPURLResponse(
             url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)

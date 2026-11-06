@@ -1,6 +1,6 @@
 import Foundation
 
-/// 契约 `docs/api/openapi.yaml` 的 HTTP 客户端。账号接口在这里，上传（#97）复用 `send`。
+/// 契约 `docs/api/openapi.yaml` 的 HTTP 客户端：账号接口，以及训练的 PUT / DELETE。
 struct APIClient {
     /// 只含协议、主机和端口，`/api/v1` 前缀由这里拼
     let baseURL: URL
@@ -28,11 +28,29 @@ struct APIClient {
         _ = try await send("auth/logout", token: token)
     }
 
+    /// 请求体原样用上传任务里存的快照，不在发送时重新序列化
+    func putWorkout(_ workoutID: UUID, body: Data, token: String) async throws -> WriteReceipt {
+        try decode(
+            await send(Self.workoutPath(workoutID), method: "PUT", token: token, body: body))
+    }
+
+    /// 契约规定 revision 放查询参数，DELETE 不带请求体
+    func deleteWorkout(
+        _ workoutID: UUID, revision: Int32, token: String
+    ) async throws -> WriteReceipt {
+        let query = [URLQueryItem(name: "revision", value: String(revision))]
+        return try decode(
+            await send(Self.workoutPath(workoutID), method: "DELETE", token: token, query: query))
+    }
+
     /// 发一个请求，2xx 返回正文，其余按契约错误体抛 `APIError`
     func send(
-        _ path: String, method: String = "POST", token: String? = nil, body: Data? = nil
+        _ path: String, method: String = "POST", token: String? = nil,
+        query: [URLQueryItem] = [], body: Data? = nil
     ) async throws -> Data {
-        var request = URLRequest(url: baseURL.appending(path: "api/v1/" + path))
+        var url = baseURL.appending(path: "api/v1/" + path)
+        if !query.isEmpty { url.append(queryItems: query) }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body {
@@ -66,6 +84,10 @@ struct APIClient {
             throw APIError.undecodable
         }
     }
+
+    private static func workoutPath(_ workoutID: UUID) -> String {
+        "workouts/" + workoutID.uuidString.lowercased()
+    }
 }
 
 struct Credentials: Encodable {
@@ -83,6 +105,19 @@ struct AuthResult: Decodable {
         case userID = "user_id"
         case username
         case accessToken = "access_token"
+    }
+}
+
+/// 契约 WriteReceipt：PUT 和 DELETE 成功时都返回
+struct WriteReceipt: Decodable {
+    let workoutID: UUID
+    let acceptedRevision: Int32
+    let deleted: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case workoutID = "workout_id"
+        case acceptedRevision = "accepted_revision"
+        case deleted
     }
 }
 
