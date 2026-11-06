@@ -111,7 +111,7 @@ final class AccountStoreTests: XCTestCase {
             (
                 401,
                 Data(
-                    #"{"error":{"code":"INVALID_CREDENTIALS","message":"用户名或密码错误","fields":[]}}"#
+                    #"{"error":{"code":"INVALID_CREDENTIALS","message":"server-msg","fields":[]}}"#
                         .utf8)
             )
         }
@@ -138,7 +138,9 @@ final class AccountStoreTests: XCTestCase {
         StubURLProtocol.handler = { _ in
             (
                 409,
-                Data(#"{"error":{"code":"USERNAME_TAKEN","message":"用户名已被使用","fields":[]}}"#.utf8)
+                Data(
+                    #"{"error":{"code":"USERNAME_TAKEN","message":"server-msg","fields":[]}}"#
+                        .utf8)
             )
         }
         do {
