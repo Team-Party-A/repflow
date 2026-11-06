@@ -12,8 +12,7 @@ struct SettingsView: View {
 
     init(account: Account) {
         self.account = account
-        let userID = account.userID
-        _workouts = Query(filter: #Predicate<Workout> { $0.userID == userID })
+        _workouts = Query(filter: WorkoutStore.owned(by: account.userID))
     }
 
     private var unsyncedCount: Int { workouts.filter { !$0.isSynced }.count }

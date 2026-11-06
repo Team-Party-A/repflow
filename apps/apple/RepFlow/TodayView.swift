@@ -10,7 +10,7 @@ struct TodayView: View {
 
     init(userID: UUID) {
         self.userID = userID
-        _workouts = Query(filter: #Predicate<Workout> { $0.userID == userID })
+        _workouts = Query(filter: WorkoutStore.owned(by: userID))
     }
 
     var body: some View {

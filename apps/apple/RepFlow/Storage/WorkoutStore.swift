@@ -13,10 +13,14 @@ struct WorkoutStore {
             configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory))
     }
 
+    /// 按账号过滤的唯一写法；各页面的 @Query 也用它，测试经 `workouts()` 覆盖到同一个谓词
+    nonisolated static func owned(by userID: UUID) -> Predicate<Workout> {
+        #Predicate { $0.userID == userID }
+    }
+
     func workouts() throws -> [Workout] {
-        let userID = userID
         let descriptor = FetchDescriptor<Workout>(
-            predicate: #Predicate { $0.userID == userID },
+            predicate: Self.owned(by: userID),
             sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
         return try context.fetch(descriptor)
     }
