@@ -34,6 +34,8 @@ struct RepFlowApp: App {
                     TabView {
                         TodayView(userID: account.userID)
                             .tabItem { Label("今天", systemImage: "chart.bar") }
+                        HistoryView(userID: account.userID)
+                            .tabItem { Label("历史", systemImage: "list.bullet") }
                         ContentView(transfer: transfer)
                             .tabItem { Label("录制文件", systemImage: "waveform") }
                         SettingsView(account: account)

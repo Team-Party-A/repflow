@@ -1,7 +1,7 @@
 import SwiftData
 import SwiftUI
 
-/// 「今天」页的最小版本：手动记录入口。统计卡、最近训练、历史与详情在下一批 Issue 做。
+/// 「今天」页的最小版本：手动记录入口。统计卡、最近训练在下一批 Issue 做；历史与详情在「历史」页。
 struct TodayView: View {
     let userID: UUID
 

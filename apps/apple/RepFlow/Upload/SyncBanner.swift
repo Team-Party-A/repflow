@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 /// 页面顶部的同步横幅（原型 `banners()`）：登录失效时提示重新登录；有记录没传上去时显示
-/// 「同步失败」并可重试。都没有时不占位置。逐条训练的同步标签随历史列表（#99）做。
+/// 「同步失败」并可重试。都没有时不占位置。逐条训练的同步标签在历史列表和详情页。
 struct SyncBanner: View {
     let userID: UUID
 

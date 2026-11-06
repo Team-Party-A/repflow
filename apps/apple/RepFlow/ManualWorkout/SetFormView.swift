@@ -8,11 +8,19 @@ struct DraftSet: Identifiable, Equatable {
     var weightGrams: Int?
 }
 
+/// 删除一组前要不要确认，以及弹窗文案。草稿阶段的删除不需要，已保存的组需要
+struct DeleteConfirmation {
+    let title: String
+    let message: String
+    let action: String
+}
+
 /// 添加或修改一组：动作、次数、重量（可不填）。对应原型的 setForm。
 struct SetFormView: View {
     let title: String
     /// 只在修正已有组时传，显示红字「删除这一组」
     let onDelete: (() -> Void)?
+    let deleteConfirmation: DeleteConfirmation?
     let onSave: (DraftSet) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -20,15 +28,18 @@ struct SetFormView: View {
     @State private var repsText: String
     @State private var weightText: String
     @State private var errorMessage: String?
+    @State private var isConfirmingDelete = false
     private let draftID: UUID?
 
     /// `blankReps` 为 true 时只沿用动作和重量，次数留空让用户填
     init(
         title: String, initial: DraftSet?, blankReps: Bool, onDelete: (() -> Void)? = nil,
+        deleteConfirmation: DeleteConfirmation? = nil,
         onSave: @escaping (DraftSet) -> Void
     ) {
         self.title = title
         self.onDelete = onDelete
+        self.deleteConfirmation = deleteConfirmation
         self.onSave = onSave
         draftID = initial?.id
         _exerciseID = State(initialValue: initial?.exerciseID ?? ExerciseCatalog.all[0].id)
@@ -98,8 +109,12 @@ struct SetFormView: View {
 
                     if let onDelete {
                         Button(role: .destructive) {
-                            onDelete()
-                            dismiss()
+                            if deleteConfirmation == nil {
+                                onDelete()
+                                dismiss()
+                            } else {
+                                isConfirmingDelete = true
+                            }
                         } label: {
                             Label("删除这一组", systemImage: "trash")
                                 .font(.body)
@@ -113,6 +128,17 @@ struct SetFormView: View {
                 .padding(.vertical, 8)
             }
             .pageBackground()
+            .confirmationDialog(
+                deleteConfirmation?.title ?? "", isPresented: $isConfirmingDelete,
+                titleVisibility: .visible
+            ) {
+                Button(deleteConfirmation?.action ?? "删除", role: .destructive) {
+                    onDelete?()
+                    dismiss()
+                }
+            } message: {
+                Text(deleteConfirmation?.message ?? "")
+            }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
