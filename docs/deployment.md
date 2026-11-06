@@ -216,3 +216,35 @@ systemctl --user list-timers repflow-cert-renew.timer
 - `check.sh` 保留原有验收，并调用 `check_https_stack.py` 验证 HTTP-01、真实 nginx HTTPS、reload、nginx 重启和无效配置拒绝／回退；只使用独立临时项目和测试卷。本机空间紧张，最小容器停在 Created，重启 Docker Desktop 后仍启动超时，尚未确认根因。负责人同意暂缓本机镜像构建／完整 Compose 验收，本机结果记为环境受阻；测试不删除、不设跳过，完整验证由 CI 执行。
 - 双架构验收（2026-11-01）：[PR #83 的 Backend CI](https://github.com/Team-Party-A/repflow/actions/runs/41267660112) 在代码提交 `7a5d558` 上通过；amd64／arm64 各通过 34 项部署／TLS 测试、56 项后端 pytest，pytest-cov 报告覆盖率 99%。镜像构建、数据库超时／恢复、API 换址、数据卷保留、nginx 配置更新／回退，以及完整 HTTPS 检查均通过；三个官方镜像的固定来源／架构核对通过。PR 不发布镜像或备用包。
 - **仍待验收**：PR 审查合入和 GHCR 备用包发布；GitHub 通知送达。iOS 17.2.1 真机 `/health` 因设备问题经负责人确认暂缓，后续补验，不记为通过。GitHub 定时监测需工作流合入默认分支后启用；正式证书到期续期尚未发生，当前验证为 ACME 演练和加载流程。账号接口部署就绪后另补登录测试。
+
+## 8. dev 自动部署与回退（#94）
+
+合入后的 Backend 工作流为后端和部署改动构建两种架构并发布私有 GHCR 摘要。swe 的用户级定时器每四分钟读取公开的 dev 发布任务，用现有拉取权限按摘要下载镜像。GitHub runner 只负责验证现有 HTTPS 8080 上的候选身份和 `/health`。HTTPS 8080 同时提供已约定的账号和训练路由，HTTP 80 继续服务 ACME 验证。
+
+切换前核对 dev 提交、镜像 revision、线上 Alembic 版本和 Compose 文件，备份数据库并校验归档可读性。自动切换要求候选与线上使用相同的 Alembic 版本和 Compose 文件。迁移或 Compose 改动走人工变更窗口，确认回退边界后重新登记版本。
+
+服务器先记录候选及原版本，再替换 API。若 TLS 配置有变，先验证配置再重建 nginx。GitHub 验证失败、取消或超时后，下一次定时检查恢复旧摘要和配置，并复查本机 HTTPS。中途重启后从记录继续恢复。数据库卷一直使用原卷，备份只用于人工恢复。公网状态只包含提交号、摘要、运行号、尝试号和阶段。`Confirm swe deployment or rollback` 等服务器确认；失败运行可由机器人在 #94 提醒负责人。
+
+### 上线步骤
+
+1. 审查合入后，在 swe 的 `~/repflow` 检出已审阅的配置提交（`git checkout --no-overwrite-ignore --detach <提交号>`）。按第 7 节执行 `tls.py activate` 预检并加载 nginx。验证公网 HTTPS `/health`、账号和训练路由，再登记实际运行的镜像与配置。
+2. 由部署负责人安装用户级服务。初始化会确认旧版本健康，且 HTTPS 部署状态入口已可用。
+
+   ```sh
+   cd "$HOME/repflow"
+   install -d -m 700 "$HOME/.local/lib/repflow" "$HOME/.config/systemd/user"
+   install -m 600 deploy/auto_deploy.py deploy/release_probe.py deploy/https_probe.py "$HOME/.local/lib/repflow/"
+   install -m 644 deploy/repflow-auto-deploy.service deploy/repflow-auto-deploy.timer "$HOME/.config/systemd/user/"
+   systemd-run --user --wait --collect --pipe -p "EnvironmentFile=$HOME/.config/repflow/tls.env" \
+     /usr/bin/python3 "$HOME/.local/lib/repflow/auto_deploy.py" --initialize
+   systemctl --user daemon-reload
+   systemctl --user enable --now repflow-auto-deploy.timer
+   ```
+
+3. 复用 `HTTPS_MONITOR_IP` 与 `HTTPS_MONITOR_PORT`，再设置 `SWE_AUTO_DEPLOY_ENABLED=true`。负责人接受机器人在 #94 提醒后，设置 `SWE_DEPLOY_NOTIFY=true` 并确认本人收到通知。两项开关默认关闭。用一次正常 dev 发布和一次负责人授权的失败演练验证，记录两个运行链接。失败演练可临时将 `SWE_DEPLOY_TEST_FAIL_COMMIT` 设为这次测试发布的完整提交号，确认回退后移除变量。
+
+### 日常操作
+
+- 用 `systemctl --user list-timers repflow-auto-deploy.timer` 检查定时器，用 `journalctl --user -u repflow-auto-deploy.service` 看阶段和结果。私有状态目录为 `~/.local/state/repflow/auto-deploy/`，其中 `releases.json` 记录当前、上一版和待验收版本，备份归档与命令日志也留在该目录。
+- 用户服务执行 `~/.local/lib/repflow/` 中已安装的脚本。更新部署工具时，停用 timer，重新安装已审阅的脚本和服务文件，再恢复 timer。
+- 人工更新前先关闭 `SWE_AUTO_DEPLOY_ENABLED`，等待正在执行的发布结束，再停用 timer。手工执行第 4 节的 Compose 命令时，将 `~/.local/state/repflow/auto-deploy/image.env` 作为最后一个 `--env-file`，或显式提供已核对的 `API_IMAGE`。人工回退使用记录里的旧配置提交和摘要，复验 HTTPS。人工发布后归档旧 `releases.json`、重新执行初始化，再恢复 timer 和开关。

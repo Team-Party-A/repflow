@@ -136,13 +136,33 @@ jobs:
     needs: publish
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    outputs:
+      digest: ${{ steps.index.outputs.digest }}
+      deploy: ${{ steps.scope.outputs.deploy }}
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Determine whether the merged commit changes the deployed stack
+        id: scope
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          [[ "$PUSH_BEFORE" =~ ^[0-9a-f]{40}$ ]]
+          deploy=false
+          if [[ "$GITHUB_REF_NAME" == dev ]]; then
+            if [[ "$PUSH_BEFORE" == 0000000000000000000000000000000000000000 ]]; then
+              deploy=true
+            else
+              changed=$(git diff --name-only "$PUSH_BEFORE" "$GITHUB_SHA" -- backend/ deploy/)
+              if [[ -n "$changed" ]]; then deploy=true; fi
+            fi
+          fi
+          printf 'deploy=%s\n' "$deploy" >> "$GITHUB_OUTPUT"
       - run: sh deploy/install-ci-tools.sh
       - name: Require a private package before publishing the index
         env:
@@ -153,13 +173,66 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
       - name: Publish multi-architecture index and deployment digest
+        id: index
         run: |
           image="ghcr.io/team-party-a/repflow-api:sha-$GITHUB_SHA"
           docker buildx imagetools create -t "$image" "$image-amd64" "$image-arm64"
           docker buildx imagetools inspect "$image" --format '{{json .Manifest}}' > "$RUNNER_TEMP/manifest.json"
           digest=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$RUNNER_TEMP/manifest.json")
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
           printf 'API_IMAGE=ghcr.io/team-party-a/repflow-api@%s\n' "$digest" >> "$GITHUB_STEP_SUMMARY"
-          printf 'Commit: %s. Deployment requires a manual update.\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Commit: %s\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+  verify_swe:
+    name: Verify swe HTTPS (${{ needs.manifest.outputs.digest }})
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev' && vars.SWE_AUTO_DEPLOY_ENABLED == 'true' && needs.manifest.outputs.deploy == 'true'
+    needs: manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 21
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          HTTPS_MONITOR_IP: ${{ secrets.HTTPS_MONITOR_IP }}
+          HTTPS_MONITOR_PORT: ${{ vars.HTTPS_MONITOR_PORT || '8080' }}
+          RELEASE_DIGEST: ${{ needs.manifest.outputs.digest }}
+          TEST_FAIL_COMMIT: ${{ vars.SWE_DEPLOY_TEST_FAIL_COMMIT }}
+        run: python3 deploy/release_probe.py verify
+
+  confirm_swe:
+    name: Confirm swe deployment or rollback
+    if: ${{ always() && needs.manifest.result == 'success' && (needs.verify_swe.result == 'success' || needs.verify_swe.result == 'failure') }}
+    needs: [manifest, verify_swe]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          HTTPS_MONITOR_IP: ${{ secrets.HTTPS_MONITOR_IP }}
+          HTTPS_MONITOR_PORT: ${{ vars.HTTPS_MONITOR_PORT || '8080' }}
+          RELEASE_DIGEST: ${{ needs.manifest.outputs.digest }}
+          VERIFY_RESULT: ${{ needs.verify_swe.result }}
+        run: python3 deploy/release_probe.py confirm
+
+  notify_swe:
+    name: Notify the deployment owner
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && vars.SWE_DEPLOY_NOTIFY == 'true' && (needs.verify_swe.result == 'failure' || needs.confirm_swe.result == 'failure') }}
+    needs: [verify_swe, confirm_swe]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+          gh api "repos/$GITHUB_REPOSITORY/issues/94/comments" \
+            -f body="@hulaoyagg swe 自动部署验收失败。请查看[本次运行]($run_url)中的回退结果。" >/dev/null
 
   mirror:
     name: Backup mirror (${{ matrix.arch }})

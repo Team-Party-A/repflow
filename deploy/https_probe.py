@@ -19,41 +19,46 @@ class TLSCheckError(Exception):
     pass
 
 
-def probe(ip, port=443, *, connect_host=None, cafile=None, check_status=True):
+def get_https_json(
+    ip, port, path, *, connect_host=None, cafile=None, allow_missing=False
+):
     ip = str(ipaddress.IPv4Address(ip))
     if not 1 <= port <= 65535:
         raise TLSCheckError("monitoring port must be between 1 and 65535")
     authority = ip if port == 443 else f"{ip}:{port}"
     context = ssl.create_default_context(cafile=cafile)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
-    paths = ["/health", STATUS_PATH] if check_status else ["/health"]
-    fingerprint = None
-    for path in paths:
-        with socket.create_connection((connect_host or ip, port), timeout=5) as raw:
-            with context.wrap_socket(raw, server_hostname=ip) as connection:
-                certificate = connection.getpeercert()
-                expires_at = ssl.cert_time_to_seconds(certificate["notAfter"])
-                if expires_at - time.time() < MIN_VALIDITY_SECONDS:
-                    raise TLSCheckError("certificate has less than 48 hours remaining")
-                fingerprint = hashlib.sha256(
-                    connection.getpeercert(binary_form=True)
-                ).hexdigest()
-                connection.sendall(
-                    f"GET {path} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n".encode()
+    with socket.create_connection((connect_host or ip, port), timeout=5) as raw:
+        with context.wrap_socket(raw, server_hostname=ip) as connection:
+            expires_at = ssl.cert_time_to_seconds(connection.getpeercert()["notAfter"])
+            if expires_at - time.time() < MIN_VALIDITY_SECONDS:
+                raise TLSCheckError("certificate has less than 48 hours remaining")
+            fingerprint = hashlib.sha256(
+                connection.getpeercert(binary_form=True)
+            ).hexdigest()
+            connection.sendall(
+                f"GET {path} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n".encode()
+            )
+            response = http.client.HTTPResponse(connection)
+            response.begin()
+            if allow_missing and response.status == 404:
+                return None, fingerprint
+            body = response.read(4097)
+            if response.status != 200 or len(body) > 4096:
+                raise TLSCheckError(
+                    "HTTPS endpoint did not return a bounded 200 response"
                 )
-                response = http.client.HTTPResponse(connection)
-                response.begin()
-                body = response.read(4097)
-                if response.status != 200 or len(body) > 4096:
-                    raise TLSCheckError(
-                        "HTTPS endpoint did not return a bounded 200 response"
-                    )
-                data = json.loads(body)
-                if path == "/health":
-                    if data != {"status": "ok"}:
-                        raise TLSCheckError("health check is unavailable")
-                else:
-                    check_renewal_status(data)
+            return json.loads(body), fingerprint
+
+
+def probe(ip, port=443, *, connect_host=None, cafile=None, check_status=True):
+    options = {"connect_host": connect_host, "cafile": cafile}
+    data, fingerprint = get_https_json(ip, port, "/health", **options)
+    if data != {"status": "ok"}:
+        raise TLSCheckError("health check is unavailable")
+    if check_status:
+        status, _ = get_https_json(ip, port, STATUS_PATH, **options)
+        check_renewal_status(status)
     return fingerprint
 
 
