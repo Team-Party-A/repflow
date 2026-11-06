@@ -2,21 +2,37 @@ name: Backend
 
 on:
   pull_request:
-    paths: ["backend/**", "deploy/**", ".github/workflows/backend.yml"]
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [dev, main]
-    paths: ["backend/**", "deploy/**", ".github/workflows/backend.yml"]
 
 permissions:
   contents: read
 
 concurrency:
-  group: backend-${{ github.ref }}
-  cancel-in-progress: true
+  group: backend-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      required: ${{ steps.scope.outputs.required }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 -m unittest discover -s scripts -p test_ci_scope.py
+      - id: scope
+        run: python3 scripts/ci_scope.py backend
+
   checks:
     name: Checks (${{ matrix.arch }})
+    needs: scope
+    if: needs.scope.outputs.required == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -56,6 +72,24 @@ jobs:
             NGINX_IMAGE="ghcr.io/team-party-a/repflow-nginx@$placeholder_digest" \
             POSTGRES_IMAGE="ghcr.io/team-party-a/repflow-postgres@$placeholder_digest" \
             docker compose --env-file /dev/null -f deploy/compose.yaml -f deploy/compose.ghcr.yaml config --quiet
+
+  gate:
+    name: Backend CI gate
+    if: ${{ always() }}
+    needs: [scope, checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - env:
+          SCOPE: ${{ needs.scope.result }}
+          REQUIRED: ${{ needs.scope.outputs.required }}
+          CHECKS: ${{ needs.checks.result }}
+        run: |
+          case "$SCOPE/$REQUIRED/$CHECKS" in
+            success/true/success) echo 'Both backend architectures passed.' ;;
+            success/false/skipped) echo 'No backend or deployment changes in the checked commit.' ;;
+            *) echo 'Backend CI is incomplete or failed.' >&2; exit 1 ;;
+          esac
 
   publish:
     if: github.event_name == 'push'
