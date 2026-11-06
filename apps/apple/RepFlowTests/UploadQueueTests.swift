@@ -47,9 +47,10 @@ final class UploadQueueTests: XCTestCase {
         let api = APIClient(
             baseURL: URL(string: "https://api.example.invalid:8080")!,
             session: URLSession(configuration: configuration))
-        accounts = AccountStore(api: api, keychain: keychain, defaults: defaults)
         container = try WorkoutStore.makeContainer(inMemory: true)
         context = ModelContext(container)
+        accounts = AccountStore(
+            api: api, context: context, keychain: keychain, defaults: defaults)
         // 退避间隔注入为 0：网络类失败首发后再试 2 次，测试不用真等
         queue = UploadQueue(
             context: context, api: api, accounts: accounts, retryDelays: [.zero, .zero])
