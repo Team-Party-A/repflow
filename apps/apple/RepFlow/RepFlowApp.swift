@@ -7,6 +7,8 @@ struct RepFlowApp: App {
     private let transfer = RecordingTransfer.shared
     private let container: ModelContainer
     @StateObject private var accounts: AccountStore
+    @StateObject private var uploads: UploadQueue
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         let container: ModelContainer
@@ -16,9 +18,13 @@ struct RepFlowApp: App {
             // 本地库打不开时继续运行只会让记录静默丢失，直接终止并留下原因
             fatalError("open local workout store failed: \(error)")
         }
+        let api = APIClient.configured()
+        let accounts = AccountStore(api: api, context: container.mainContext)
         self.container = container
-        _accounts = StateObject(
-            wrappedValue: AccountStore(api: APIClient.configured(), context: container.mainContext))
+        _accounts = StateObject(wrappedValue: accounts)
+        // 和页面共用 mainContext：训练和任务的改动彼此立即可见，不会读到另一个上下文的旧缓存
+        _uploads = StateObject(
+            wrappedValue: UploadQueue(context: container.mainContext, api: api, accounts: accounts))
     }
 
     var body: some Scene {
@@ -42,7 +48,18 @@ struct RepFlowApp: App {
             // 规范只有一个强调色 Volt，系统蓝不再出现；选中态用正文色
             .tint(Palette.text)
             .environmentObject(accounts)
+            .environmentObject(uploads)
+            // 登录和注册成功都会走到这里；同账号重新登录后接着发之前没传完的任务
+            .onChange(of: accounts.current?.userID) { _, userID in
+                if let userID { uploads.sync(userID: userID) }
+            }
         }
         .modelContainer(container)
+        // 冷启动也算回到前台：杀掉重开后没传完的任务会接着发
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active, let userID = accounts.current?.userID {
+                uploads.sync(userID: userID)
+            }
+        }
     }
 }

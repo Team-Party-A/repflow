@@ -10,6 +10,7 @@ struct ManualWorkoutView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var uploads: UploadQueue
     @State private var startedAt = Date()
     @State private var sets: [DraftSet] = []
     @State private var editing: DraftSet?
@@ -110,6 +111,7 @@ struct ManualWorkoutView: View {
             try WorkoutStore(context: modelContext, userID: userID).create(
                 startedAt: startedAt, timeZone: TimeZone.current.identifier, origin: .phone,
                 sets: workoutSets)
+            uploads.sync(userID: userID)
             dismiss()
         } catch {
             logger.error("save manual workout failed: sets=\(sets.count), error=\(error)")

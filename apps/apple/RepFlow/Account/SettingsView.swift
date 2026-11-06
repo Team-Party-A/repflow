@@ -1,26 +1,31 @@
 import SwiftData
 import SwiftUI
 
-/// 设置页最小版本：当前账号与退出登录。同步状态卡片随上传（#97）补。
+/// 设置页：当前账号、同步状态与退出登录
 struct SettingsView: View {
     let account: Account
 
     @EnvironmentObject private var accounts: AccountStore
+    @EnvironmentObject private var uploads: UploadQueue
     @Environment(\.colorScheme) private var colorScheme
     @Query private var workouts: [Workout]
+    @Query private var tasks: [UploadTask]
     @State private var isConfirmingLogout = false
 
     init(account: Account) {
         self.account = account
         _workouts = Query(filter: WorkoutStore.owned(by: account.userID))
+        _tasks = Query(filter: WorkoutStore.uploadTasks(of: account.userID))
     }
 
-    private var unsyncedCount: Int { workouts.filter { !$0.isSynced }.count }
+    /// 一条训练最多一个任务，所以任务数就是待同步的训练数加上没发出去的删除
+    private var unsyncedCount: Int { tasks.count }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    SyncBanner(userID: account.userID)
                     HStack(spacing: 14) {
                         Text(account.username.prefix(1).uppercased())
                             .font(.title2.weight(.bold))
@@ -41,6 +46,28 @@ struct SettingsView: View {
                     }
                     .padding(16)
                     .card()
+
+                    Text("同步")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Palette.text2)
+                        .padding(.leading, 4)
+                    HStack {
+                        Text("待上传").foregroundStyle(Palette.text)
+                        Spacer()
+                        Text(unsyncedCount > 0 ? "\(unsyncedCount) 条" : "无")
+                            .foregroundStyle(Palette.text2)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .card()
+                    if unsyncedCount > 0 && !accounts.isSessionExpired {
+                        Button {
+                            Task { await uploads.retry(userID: account.userID) }
+                        } label: {
+                            Label("立即上传", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                    }
 
                     Text("训练记录按账号分开保存在本机。退出登录不会删除记录，再次登录同一账号后，未上传的记录会继续上传。")
                         .font(.footnote)
