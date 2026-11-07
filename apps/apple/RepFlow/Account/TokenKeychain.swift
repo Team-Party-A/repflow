@@ -1,10 +1,17 @@
 import Foundation
 import Security
 
+/// AccountStore 读写 token 的接口。单元测试换成内存实现：CI 用 `CODE_SIGNING_ALLOWED=NO`
+/// 构建，不签名的测试宿主没有钥匙串权限，`SecItemAdd` 会返回 errSecMissingEntitlement（-34018）。
+protocol TokenStore {
+    func save(_ token: String, for userID: UUID) throws
+    func token(for userID: UUID) -> String?
+    func delete(for userID: UUID)
+}
+
 /// 按 user_id 存登录 token。每个账号一条，切换账号不覆盖别人的；密码从不落盘。
-struct TokenKeychain {
-    /// 测试用独立的 service，避免碰到真实登录态
-    var service = "repflow.access-token"
+struct TokenKeychain: TokenStore {
+    private let service = "repflow.access-token"
 
     func save(_ token: String, for userID: UUID) throws {
         delete(for: userID)

@@ -43,11 +43,20 @@ final class StubURLProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
+/// 内存里的 token 存储。用类，测试和 AccountStore 拿到的是同一份
+final class InMemoryTokenStore: TokenStore {
+    private var tokens: [UUID: String] = [:]
+
+    func save(_ token: String, for userID: UUID) throws { tokens[userID] = token }
+    func token(for userID: UUID) -> String? { tokens[userID] }
+    func delete(for userID: UUID) { tokens[userID] = nil }
+}
+
 @MainActor
 final class AccountStoreTests: XCTestCase {
     private let userA = UUID()
     private let userB = UUID()
-    private let keychain = TokenKeychain(service: "repflow.access-token.tests")
+    private let keychain = InMemoryTokenStore()
     private var defaults: UserDefaults!
     private var container: ModelContainer!
     private var store: AccountStore!
@@ -67,8 +76,6 @@ final class AccountStoreTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        keychain.delete(for: userA)
-        keychain.delete(for: userB)
         StubURLProtocol.handler = nil
     }
 

@@ -33,7 +33,7 @@ private func json(_ data: Data?) throws -> [String: Any] {
 final class UploadQueueTests: XCTestCase {
     private let userA = UUID()
     private let userB = UUID()
-    private let keychain = TokenKeychain(service: "repflow.access-token.upload-tests")
+    private let keychain = InMemoryTokenStore()
     private var accounts: AccountStore!
     private var container: ModelContainer!
     private var context: ModelContext!
@@ -58,8 +58,6 @@ final class UploadQueueTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        keychain.delete(for: userA)
-        keychain.delete(for: userB)
         StubURLProtocol.handler = nil
     }
 

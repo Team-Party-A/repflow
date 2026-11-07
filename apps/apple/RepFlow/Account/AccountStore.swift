@@ -14,13 +14,13 @@ final class AccountStore: ObservableObject {
     /// nil 表示本机构建没配后端地址
     private let api: APIClient?
     private let context: ModelContext
-    private let keychain: TokenKeychain
+    private let keychain: any TokenStore
     private let defaults: UserDefaults
     /// 最近一次登录的账号。退出不清：有 token 就是当前账号，没有就只用来预填用户名
     private static let lastUserKey = "lastUserID"
 
     init(
-        api: APIClient?, context: ModelContext, keychain: TokenKeychain = TokenKeychain(),
+        api: APIClient?, context: ModelContext, keychain: any TokenStore = TokenKeychain(),
         defaults: UserDefaults = .standard
     ) {
         self.api = api
