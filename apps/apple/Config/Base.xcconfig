@@ -4,6 +4,9 @@
 BUNDLE_ID_SUFFIX =
 DEVELOPMENT_TEAM =
 
+// 后端地址只放 Local.xcconfig，不入库。留空时 App 能启动，但登录会提示未配置
+REPFLOW_API_BASE_URL =
+
 #include? "Local.xcconfig"
 
 REPFLOW_BUNDLE_ID = io.github.teampartya.repflow$(BUNDLE_ID_SUFFIX)

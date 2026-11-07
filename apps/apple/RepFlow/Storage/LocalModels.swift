@@ -112,3 +112,89 @@ final class WorkoutSet {
         SetRecordSource(rawValue: recordSourceRaw) ?? .manual
     }
 }
+
+enum UploadKind: String, Codable {
+    case put
+    case delete
+}
+
+enum UploadTaskState: String, Codable {
+    /// 等下一次触发（保存、回到前台、登录成功、点重试）
+    case waiting
+    /// 网络错误、超时、5xx 用完本轮重试；下一次触发会自动再试
+    case failed
+    /// 后端拒收（409、410、422 等）。同一份快照再发结果不会变，只在用户点重试或内容改出新版本时重发
+    case rejected
+}
+
+/// 待发送的 PUT / DELETE。一条训练只留一个任务：新版本直接覆盖还没发出的旧任务，
+/// 后端只接受更大的 revision，旧版本没必要再发。回执确认后删除。
+@Model
+final class UploadTask {
+    @Attribute(.unique) var workoutID: UUID
+    /// 只能用这个账号的 token 发送
+    var userID: UUID
+    var revision: Int32
+    var kindRaw: String
+    /// PUT 的完整请求体，重试只发这份，保证同一 revision 不会发出两种内容；DELETE 没有请求体
+    var requestSnapshot: Data?
+    var stateRaw: String
+    var attemptCount: Int
+    /// 契约错误码，或 NETWORK、HTTP_502 这类没有契约错误体时的说明
+    var lastErrorCode: String?
+    var createdAt: Date
+
+    init(workoutID: UUID, userID: UUID) {
+        self.workoutID = workoutID
+        self.userID = userID
+        self.revision = 1
+        self.kindRaw = UploadKind.put.rawValue
+        self.stateRaw = UploadTaskState.waiting.rawValue
+        self.attemptCount = 0
+        self.createdAt = Date()
+    }
+
+    var kind: UploadKind {
+        get { UploadKind(rawValue: kindRaw) ?? .put }
+        set { kindRaw = newValue.rawValue }
+    }
+
+    var state: UploadTaskState {
+        get { UploadTaskState(rawValue: stateRaw) ?? .waiting }
+        set { stateRaw = newValue.rawValue }
+    }
+}
+
+/// 删除标记：训练内容删掉后留下的最小记录，用来挡住手表的旧补发和在途请求把训练恢复。
+/// 不过期，退出登录也不清。
+@Model
+final class DeletedWorkout {
+    @Attribute(.unique) var workoutID: UUID
+    var userID: UUID
+    /// 删除时推进后的 revision，也是 DELETE 任务的 revision
+    var revision: Int32
+    /// 后端确认过的删除版本
+    var confirmedRevision: Int32?
+    /// 沿用被删训练的结束交接标记，删除后重复的结束消息仍能认出来
+    var endHandoffReceived: Bool
+
+    init(workoutID: UUID, userID: UUID, revision: Int32, endHandoffReceived: Bool) {
+        self.workoutID = workoutID
+        self.userID = userID
+        self.revision = revision
+        self.endHandoffReceived = endHandoffReceived
+    }
+}
+
+/// 本机登录过的账号，见 `docs/design/数据库设计.md` 第 5 节。token 不在这里，在 Keychain。
+/// 退出不删：退出或 token 失效后，本机仍知道留下的记录属于哪个用户名，重新登录时能预填。
+@Model
+final class Account {
+    @Attribute(.unique) var userID: UUID
+    var username: String
+
+    init(userID: UUID, username: String) {
+        self.userID = userID
+        self.username = username
+    }
+}

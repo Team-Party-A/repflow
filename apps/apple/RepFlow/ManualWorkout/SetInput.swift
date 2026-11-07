@@ -47,9 +47,11 @@ enum SetInput {
         return NSDecimalNumber(decimal: rounded).intValue
     }
 
-    /// 克 → 界面显示的 kg 文本，去掉多余的 0
+    /// 克 → 界面显示的 kg 文本，去掉多余的 0。固定用点号作小数点：这段文本会预填回表单，
+    /// 而 `weightGrams(from:)` 只认点号，跟随地区会在逗号小数点的设置下解析失败
     static func weightText(grams: Int?) -> String {
         guard let grams else { return "" }
-        return (Decimal(grams) / 1000).formatted(.number.grouping(.never))
+        return (Decimal(grams) / 1000).formatted(
+            .number.grouping(.never).locale(Locale(identifier: "en_US_POSIX")))
     }
 }
