@@ -12,9 +12,12 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from urllib.request import Request, urlopen
 
+import github_poll
+from github_poll import PollDeferred
 from https_probe import TLSCheckError, probe
+from image_cache import image_cached
+from release_metrics import network_delta, snapshot_network, utc_now
 from release_probe import COMMIT, DIGEST, status_of
 
 REPOSITORY = "Team-Party-A/repflow"
@@ -60,15 +63,18 @@ def atomic_write(path, content, mode=0o600):
 
 
 def api(path):
-    request = Request(
-        f"https://api.github.com/repos/{REPOSITORY}/actions/{path}",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2026-03-10",
-        },
-    )
-    with urlopen(request, timeout=10) as response:
-        return json.load(response)
+    state = Path.home() / ".local/state/repflow/auto-deploy/github-poll.json"
+    return github_poll.get(path, state, atomic_write)
+
+
+def record_metric(directory, request, event, **values):
+    path = directory / f"metrics-{request['run_id']}-{request['attempt']}.json"
+    try:
+        data = json.loads(path.read_text()) if path.exists() else {}
+        data[event] = {"timestamp": utc_now(), **values}
+        atomic_write(path, json.dumps(data) + "\n")
+    except (OSError, ValueError) as error:
+        logger.warning("Release metrics unavailable: kind=%s", type(error).__name__)
 
 
 def status_identity(request):
@@ -76,7 +82,7 @@ def status_identity(request):
 
 
 def discover(after):
-    # 最多三次未认证请求，每四分钟一轮，低于公开 API 每小时配额。
+    # runs 和 jobs 各自做条件请求，runs 未变化不代表 jobs 也未变化。
     runs = api(
         "workflows/backend.yml/runs?branch=dev&event=push&status=in_progress&per_page=2"
     )
@@ -118,7 +124,9 @@ def verification_result(request):
         and job["name"] == f"Verify swe HTTPS ({request['digest']})",
         "unexpected GitHub verification job",
     )
-    return job["conclusion"] if job["status"] == "completed" else None
+    if job["status"] == "in_progress":
+        return None
+    return job.get("conclusion") or job["status"]
 
 
 class Stack:
@@ -228,7 +236,31 @@ class Stack:
             "Compose changes require a reviewed manual deployment",
         )
         self.run([*self.docker, "image", "inspect", "-f", "{{.Id}}", current["image"]])
-        self.run([*self.docker, "pull", candidate["image"]], timeout=240)
+        started = time.monotonic()
+        started_at = utc_now()
+        before = snapshot_network()
+        cached = False
+        downloaded = False
+        pull_attempted = False
+        try:
+            cached = image_cached(candidate["image"], candidate["commit"])
+            if not cached:
+                pull_attempted = True
+                self.run([*self.docker, "pull", candidate["image"]], timeout=240)
+            downloaded = True
+        finally:
+            after = snapshot_network()
+            record_metric(
+                self.state,
+                request,
+                "download",
+                started_at=started_at,
+                elapsed_seconds=round(time.monotonic() - started, 3),
+                cache_hit=cached,
+                pull_attempted=pull_attempted,
+                completed=downloaded,
+                network=network_delta(before, after),
+            )
         revision = self.run(
             [
                 *self.docker,
@@ -364,6 +396,7 @@ class Deployment:
         self.state["status"] = dict(status_identity(request), state=state)
         self.save()
         self.write_status(self.state["status"])
+        record_metric(self.stack.state, request, state)
         logger.info(
             "Release %s attempt %s: %s", request["run_id"], request["attempt"], state
         )
@@ -402,6 +435,7 @@ class Deployment:
 
     def finish(self, request, state):
         self.state["pending"] = None
+        self.state["poll_after"] = time.time() + 120
         self.publish(request, state)
 
     def rollback(self, pending):
@@ -446,20 +480,44 @@ class Deployment:
                 self.rollback(pending)
 
     def tick(self):
+        try:
+            self.poll()
+        except PollDeferred as error:
+            self.state["poll_after"] = error.until
+            self.save()
+            logger.info("GitHub polling deferred until %d", error.until)
+
+    def poll(self):
         require(
             self.state is not None,
             "initialize deployment state before enabling the timer",
         )
-        if self.state["pending"] is not None:
-            self.reconcile(self.state["pending"])
+        pending = self.state["pending"]
+        if pending is not None:
+            # 恢复和到期回退先执行，不依赖网络额度或下一次查询时间。
+            recovery = (
+                pending["phase"] != "candidate" or time.time() >= pending["deadline"]
+            )
+            if not recovery and time.time() < self.state.get("poll_after", 0):
+                return
+            self.reconcile(pending)
             if self.state["pending"] is not None and self.state["status"] is not None:
+                pending["fast_polls"] = pending.get("fast_polls", 0) + 1
+                interval = 30 if pending["fast_polls"] < 4 else 120
+                self.state["poll_after"] = time.time() + interval
+                self.save()
                 self.write_status(self.state["status"])
             return
         if self.state["status"] is not None:
             self.write_status(self.state["status"])
+        if time.time() < self.state.get("poll_after", 0):
+            return
+        self.state["poll_after"] = time.time() + 120
+        self.save()
         request = discover(self.state["last"])
         if request is None:
             return
+        record_metric(self.stack.state, request, "discovered")
         current = self.state["current"]
         candidate = {
             "commit": request["commit"],
@@ -477,6 +535,7 @@ class Deployment:
         if candidate == current:
             self.stack.verify(current)
             pending["phase"] = "candidate"
+            self.state["poll_after"] = time.time() + 30
             self.publish(request, "candidate")
             return
         try:
@@ -485,6 +544,11 @@ class Deployment:
                 verification_result(request) is None,
                 "external verification ended before the switch",
             )
+        except PollDeferred:
+            self.finish(request, "failed")
+            raise DeployError(
+                "GitHub verification unavailable before cutover"
+            ) from None
         except Exception:
             self.finish(request, "failed")
             raise
@@ -496,6 +560,7 @@ class Deployment:
             self.rollback(pending)
             raise
         pending["phase"] = "candidate"
+        self.state["poll_after"] = time.time() + 30
         self.publish(request, "candidate")
 
 

@@ -219,7 +219,7 @@ systemctl --user list-timers repflow-cert-renew.timer
 
 ## 8. dev 自动部署与回退（#94）
 
-合入后的 Backend 工作流为后端和部署改动构建两种架构并发布私有 GHCR 摘要。swe 的用户级定时器每四分钟读取公开的 dev 发布任务，用现有拉取权限按摘要下载镜像。GitHub runner 只负责验证现有 HTTPS 8080 上的候选身份和 `/health`。HTTPS 8080 同时提供已约定的账号和训练路由，HTTP 80 继续服务 ACME 验证。
+合入后的 Backend 工作流为后端和部署改动构建两种架构并发布私有 GHCR 摘要。swe 的用户级定时器每 30 秒唤醒，空闲时约每两分钟查询公开的 dev 发布任务，用现有拉取权限按摘要下载镜像。候选就绪后最多做四次约 30 秒间隔的确认，再退回两分钟。GitHub runner 验证现有 HTTPS 8080 上的候选身份和 `/health`。HTTPS 8080 同时提供已约定的账号和训练路由，HTTP 80 继续服务 ACME 验证。
 
 切换前核对 dev 提交、镜像 revision、线上 Alembic 版本和 Compose 文件，备份数据库并校验归档可读性。自动切换要求候选与线上使用相同的 Alembic 版本和 Compose 文件。迁移或 Compose 改动走人工变更窗口，确认回退边界后重新登记版本。
 
@@ -233,7 +233,8 @@ systemctl --user list-timers repflow-cert-renew.timer
    ```sh
    cd "$HOME/repflow"
    install -d -m 700 "$HOME/.local/lib/repflow" "$HOME/.config/systemd/user"
-   install -m 600 deploy/auto_deploy.py deploy/release_probe.py deploy/https_probe.py "$HOME/.local/lib/repflow/"
+   install -m 600 deploy/auto_deploy.py deploy/release_probe.py deploy/https_probe.py \
+     deploy/github_poll.py deploy/image_cache.py deploy/release_metrics.py "$HOME/.local/lib/repflow/"
    install -m 644 deploy/repflow-auto-deploy.service deploy/repflow-auto-deploy.timer "$HOME/.config/systemd/user/"
    systemd-run --user --wait --collect --pipe -p "EnvironmentFile=$HOME/.config/repflow/tls.env" \
      /usr/bin/python3 "$HOME/.local/lib/repflow/auto_deploy.py" --initialize
@@ -246,5 +247,14 @@ systemctl --user list-timers repflow-cert-renew.timer
 ### 日常操作
 
 - 用 `systemctl --user list-timers repflow-auto-deploy.timer` 检查定时器，用 `journalctl --user -u repflow-auto-deploy.service` 看阶段和结果。私有状态目录为 `~/.local/state/repflow/auto-deploy/`，其中 `releases.json` 记录当前、上一版和待验收版本，备份归档与命令日志也留在该目录。
-- 用户服务执行 `~/.local/lib/repflow/` 中已安装的脚本。更新部署工具时，停用 timer，重新安装已审阅的脚本和服务文件，再恢复 timer。
+- 用户服务执行 `~/.local/lib/repflow/` 中已安装的脚本。升级时先等 `pending` 为空、服务退出，停用 timer，再从已审阅提交提取并安装上述六个脚本和服务文件，执行 `daemon-reload` 后恢复 timer。生产 checkout 与 `releases.json` 由部署流程管理，工具升级通过 `git show <已审阅提交>:deploy/<文件>` 提取文件，避免提前改变已登记配置。
 - 人工更新前先关闭 `SWE_AUTO_DEPLOY_ENABLED`，等待正在执行的发布结束，再停用 timer。手工执行第 4 节的 Compose 命令时，将 `~/.local/state/repflow/auto-deploy/image.env` 作为最后一个 `--env-file`，或显式提供已核对的 `API_IMAGE`。人工回退使用记录里的旧配置提交和摘要，复验 HTTPS。人工发布后归档旧 `releases.json`、重新执行初始化，再恢复 timer 和开关。
+
+### 构建缓存与提速验收
+
+- CI 使用已锁定的 Buildx 0.38.1、BuildKit 0.34.2 镜像摘要及官方构建 Action 7.4.0 提交 SHA。GHA v2 缓存按 test/runtime、amd64/arm64 分四个 scope，导出 `mode=max` 中间层。PR 和合入队列只导入，dev/main push 的检查任务导出，发布任务导入 runtime 缓存。每次仍执行完整检查，双架构通过后才发布。缓存导出失败单独标明，构建与测试失败仍阻止发布。
+- swe 通过本地 Docker Engine 检查根摘要、本机平台内容完整性及 revision，完整命中时跳过 `pull`，之后继续做数据库版本检查、备份及校验、切换和健康验收。明确缺失或内容未完整时拉取，本地检查故障或身份不匹配时安全停止。
+- 私有 `github-poll.json` 保存每小时滚动请求预算、限流退避和各端点 ETag，重启继续沿用。总额 48 次，其中 discovery 最多 36 次，余量供确认和切换前校验。失败、304 和重试都计数，响应限流头可进一步延后查询。runs 的 304 仍需独立检查 jobs，网络错误不会复用旧成功结果。到期回退先于额度检查执行；切换前无法重新确认时保留现网并记录失败，后续从新 CI 尝试重试。
+- 私有 `metrics-<run>-<attempt>.json` 记录发现、下载、候选、登记或回退时间，以及下载前后的网络 RX/TX 增量。`docker_netns` 为 Docker 网络空间默认出口统计，`host` 为宿主回退，两者都包含背景流量与协议开销，不能称精确 GHCR 流量。另取等长空闲窗口作基线，缺失 blob 压缩量与线路实测值分列。
+- 验收覆盖完整缓存但不同于现网的目标、只改业务代码、真实新依赖层。记录 CI 缓存导入导出字节与耗时、层摘要、API 次数及响应体字节，并分解构建发布、发现、下载、候选确认和整体耗时。热缓存至少测三轮。真实发布按合入到 Confirm 计时，重跑按本次启动计时。保留现网及回退缓存，使用独立 CI scope 建立冷构建基线。
+- 下载仍有 240 秒边界，新的提速结果以实测确认。若新层仍超时，另行评审下载预算及其外层时限，既有完整缓存和轮询优化不会提高冷层网络吞吐率。

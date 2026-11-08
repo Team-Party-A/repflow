@@ -3,8 +3,8 @@ Description=Check for a verified RepFlow dev release
 
 [Timer]
 OnBootSec=2min
-OnUnitInactiveSec=4min
-AccuracySec=10s
+OnUnitInactiveSec=30s
+AccuracySec=1s
 
 [Install]
 WantedBy=timers.target
