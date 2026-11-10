@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+env:
+  BUILDKIT_IMAGE: moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
+  BUILDKIT_PROGRESS: plain
+
 concurrency:
   group: backend-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
@@ -56,10 +60,36 @@ jobs:
         run: docker version
       - name: Test registry visibility guard
         run: python3 -m unittest discover -s deploy -p 'test_*.py' -v
-      - name: Build test and runtime images
+      - name: Create pinned BuildKit builder
         run: |
-          docker build --target test -t "$TEST_IMAGE" backend
-          docker build --target runtime -t "$API_IMAGE" backend
+          docker buildx create --name repflow-ci --driver docker-container \
+            --driver-opt "image=$BUILDKIT_IMAGE" --use --bootstrap
+      # Only merged dev/main pushes export caches; PRs and merge groups import only.
+      - name: Build test image with architecture-specific cache
+        id: build_test
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          builder: repflow-ci
+          context: backend
+          platforms: linux/${{ matrix.arch }}
+          target: test
+          tags: ${{ env.TEST_IMAGE }}
+          load: true
+          cache-from: type=gha,version=2,scope=backend-test-${{ matrix.arch }},timeout=3m
+          cache-to: ${{ github.event_name == 'push' && format('type=gha,version=2,scope=backend-test-{0},mode=max,timeout=3m,ignore-error=true', matrix.arch) || '' }}
+      - name: Build runtime image with architecture-specific cache
+        id: build_runtime
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          builder: repflow-ci
+          context: backend
+          platforms: linux/${{ matrix.arch }}
+          target: runtime
+          tags: ${{ env.API_IMAGE }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          load: true
+          cache-from: type=gha,version=2,scope=backend-runtime-${{ matrix.arch }},timeout=3m
+          cache-to: ${{ github.event_name == 'push' && format('type=gha,version=2,scope=backend-runtime-{0},mode=max,timeout=3m,ignore-error=true', matrix.arch) || '' }}
       - name: Check formatting, tests, coverage and Compose recovery
         run: sh deploy/check.sh
       - name: Check pinned mirror sources without publishing
@@ -120,13 +150,23 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-      - name: Publish the checked commit for this native architecture
-        env:
-          IMAGE_ARCH: ${{ matrix.arch }}
+      - name: Create pinned BuildKit builder
         run: |
-          docker buildx build --platform "linux/$IMAGE_ARCH" --target runtime \
-            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
-            -t "ghcr.io/team-party-a/repflow-api:sha-$GITHUB_SHA-$IMAGE_ARCH" --push backend
+          docker buildx create --name repflow-ci --driver docker-container \
+            --driver-opt "image=$BUILDKIT_IMAGE" --use --bootstrap
+      - name: Publish the checked commit with the runtime cache
+        id: build_runtime
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          builder: repflow-ci
+          context: backend
+          platforms: linux/${{ matrix.arch }}
+          target: runtime
+          tags: ghcr.io/team-party-a/repflow-api:sha-${{ github.sha }}-${{ matrix.arch }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          push: true
+          provenance: mode=min
+          cache-from: type=gha,version=2,scope=backend-runtime-${{ matrix.arch }},timeout=3m
       - name: Verify the published package is private
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

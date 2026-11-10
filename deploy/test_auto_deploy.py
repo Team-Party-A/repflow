@@ -7,7 +7,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from auto_deploy import IMAGE, REPOSITORY, WORKFLOW, DeployError, Deployment, discover
+from auto_deploy import (
+    IMAGE,
+    REPOSITORY,
+    WORKFLOW,
+    DeployError,
+    Deployment,
+    Stack,
+    discover,
+    verification_result,
+)
+from github_poll import PollDeferred
 from release_probe import check_release, status_of
 
 CURRENT = {
@@ -53,9 +63,11 @@ class DeploymentTests(unittest.TestCase):
 
     def begin(self):
         self.deployment = Deployment(self.stack)
+        due = max(time.time(), self.deployment.state.get("poll_after", 0))
         with (
             patch("auto_deploy.discover", return_value=REQUEST),
             patch("auto_deploy.verification_result", return_value=None),
+            patch("auto_deploy.time.time", return_value=due),
         ):
             self.deployment.tick()
         self.assertEqual(
@@ -64,7 +76,11 @@ class DeploymentTests(unittest.TestCase):
 
     def resume(self, result):
         deployment = Deployment(self.stack)
-        with patch("auto_deploy.verification_result", return_value=result):
+        due = max(time.time(), deployment.state.get("poll_after", 0))
+        with (
+            patch("auto_deploy.verification_result", return_value=result),
+            patch("auto_deploy.time.time", return_value=due),
+        ):
             deployment.tick()
         return deployment.state
 
@@ -148,8 +164,118 @@ class DeploymentTests(unittest.TestCase):
         self.assertIsNone(state["pending"])
         self.assertEqual(state["status"]["state"], "rolled_back")
 
+    def test_idle_wakeup_does_not_query_before_two_minutes(self):
+        with patch("auto_deploy.discover", return_value=None) as discover:
+            self.deployment.tick()
+            Deployment(self.stack).tick()
+            discover.assert_called_once()
+
+    def test_four_fast_checks_then_backoff_survives_restart(self):
+        self.begin()
+        for interval in [30, 30, 30, 120]:
+            due = json.loads(self.deployment.path.read_text())["poll_after"]
+            state = self.resume(None)
+            self.assertEqual(state["poll_after"], due + interval)
+
+    def test_quota_wait_cannot_prevent_expired_candidate_rollback(self):
+        self.begin()
+        due = self.deployment.state["poll_after"]
+        with (
+            patch("auto_deploy.time.time", return_value=due),
+            patch(
+                "auto_deploy.verification_result",
+                side_effect=PollDeferred(due + 3600, "budget"),
+            ),
+        ):
+            self.deployment.tick()
+        self.assertIsNotNone(self.deployment.state["pending"])
+        self.assertEqual(self.deployment.state["current"], CURRENT)
+        self.deployment.state["pending"]["deadline"] = time.time() - 1
+        self.deployment.save()
+        with patch("auto_deploy.verification_result") as network:
+            Deployment(self.stack).tick()
+            network.assert_not_called()
+        self.stack.activate.assert_called_with(CURRENT, rollback=True)
+
+    def test_verification_budget_unavailable_before_cutover_keeps_current(self):
+        with (
+            patch("auto_deploy.discover", return_value=REQUEST),
+            patch(
+                "auto_deploy.verification_result",
+                side_effect=PollDeferred(time.time() + 60, "budget"),
+            ),
+            self.assertRaisesRegex(DeployError, "before cutover"),
+        ):
+            self.deployment.tick()
+        self.stack.activate.assert_not_called()
+        self.assertEqual(self.deployment.state["current"], CURRENT)
+        self.assertIsNone(self.deployment.state["pending"])
+
+
+class PreparationTests(unittest.TestCase):
+    def test_cached_candidate_still_checks_schema_and_writes_backup(self):
+        with (
+            tempfile.TemporaryDirectory() as folder,
+            patch.dict("os.environ", PUBLIC_IP="192.0.2.1"),
+        ):
+            root = Path(folder)
+            stack = Stack(root, root, root, root / "unused.env")
+            stack.git = Mock(return_value="")
+            stack.verify = Mock()
+            stack.run = Mock(return_value=REQUEST["commit"])
+
+            def compose(*args, **options):
+                if "output_file" in options:
+                    options["output_file"].write(b"test-backup")
+                if (
+                    args[:2] == ("exec", "-T")
+                    and "input_file" not in options
+                    and "output_file" not in options
+                ):
+                    return "0002_workouts"
+                return "0002_workouts (head)"
+
+            stack.compose_run = Mock(side_effect=compose)
+            with (
+                patch("auto_deploy.image_cached", return_value=True),
+                patch("auto_deploy.snapshot_network", return_value={}),
+                patch(
+                    "auto_deploy.network_delta", return_value={"scope": "unavailable"}
+                ),
+            ):
+                stack.prepare(CURRENT, CANDIDATE, REQUEST)
+            self.assertFalse(
+                any("pull" in row.args[0] for row in stack.run.call_args_list)
+            )
+            self.assertTrue((root / "backup-18-2.dump").exists())
+            self.assertTrue((root / "backup-18-2.sha256").exists())
+            self.assertTrue(
+                any(
+                    "input_file" in row.kwargs
+                    for row in stack.compose_run.call_args_list
+                )
+            )
+            self.assertTrue(
+                json.loads((root / "metrics-18-2.json").read_text())["download"][
+                    "cache_hit"
+                ]
+            )
+
 
 class ProtocolTests(unittest.TestCase):
+    def test_only_running_verifier_allows_cutover(self):
+        job = {
+            "run_id": REQUEST["run_id"],
+            "head_sha": REQUEST["commit"],
+            "name": f"Verify swe HTTPS ({REQUEST['digest']})",
+            "conclusion": None,
+        }
+        for status in ["queued", "completed"]:
+            with patch("auto_deploy.api", return_value=dict(job, status=status)):
+                self.assertIsNotNone(verification_result(REQUEST))
+        with patch("auto_deploy.api", return_value=dict(job, status="in_progress")):
+            self.assertIsNone(verification_result(REQUEST))
+
     def test_discovery_accepts_only_the_new_matching_dev_run(self):
         run = {
             "run_number": 8,
