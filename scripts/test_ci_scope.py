@@ -42,6 +42,19 @@ class ScopeTest(unittest.TestCase):
         for module in ("apple", "backend"):
             self.assertFalse(needs_checks(module, "pull_request", event, head))
 
+    def test_api_contract_is_a_backend_build_input(self):
+        self.write("docs/api/openapi.yaml")
+        head = self.commit()
+        events = (
+            ("pull_request", {"pull_request": {"base": {"sha": self.base}}}),
+            ("merge_group", {"merge_group": {"base_sha": self.base}}),
+            ("push", {"before": self.base}),
+        )
+        for event, payload in events:
+            with self.subTest(event=event):
+                self.assertTrue(needs_checks("backend", event, payload, head))
+                self.assertFalse(needs_checks("apple", event, payload, head))
+
     def test_merge_group_checks_combined_tree_including_renames(self):
         Path("apps/apple/example.swift").rename("moved.swift")
         self.commit()

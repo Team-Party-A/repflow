@@ -71,6 +71,7 @@ jobs:
         with:
           builder: repflow-ci
           context: backend
+          build-contexts: api_contract=./docs/api
           platforms: linux/${{ matrix.arch }}
           target: test
           tags: ${{ env.TEST_IMAGE }}
@@ -83,6 +84,7 @@ jobs:
         with:
           builder: repflow-ci
           context: backend
+          build-contexts: api_contract=./docs/api
           platforms: linux/${{ matrix.arch }}
           target: runtime
           tags: ${{ env.API_IMAGE }}
@@ -160,6 +162,7 @@ jobs:
         with:
           builder: repflow-ci
           context: backend
+          build-contexts: api_contract=./docs/api
           platforms: linux/${{ matrix.arch }}
           target: runtime
           tags: ghcr.io/team-party-a/repflow-api:sha-${{ github.sha }}-${{ matrix.arch }}
@@ -198,7 +201,7 @@ jobs:
             if [[ "$PUSH_BEFORE" == 0000000000000000000000000000000000000000 ]]; then
               deploy=true
             else
-              changed=$(git diff --name-only "$PUSH_BEFORE" "$GITHUB_SHA" -- backend/ deploy/)
+              changed=$(git diff --name-only "$PUSH_BEFORE" "$GITHUB_SHA" -- backend/ deploy/ docs/api/openapi.yaml)
               if [[ -n "$changed" ]]; then deploy=true; fi
             fi
           fi

@@ -36,7 +36,10 @@ def needs_checks(module, event, payload, head):
     prefixes = (b"apps/apple/",) if module == "apple" else (b"backend/", b"deploy/")
     workflow = f".github/workflows/{module}.yml".encode()
     return any(
-        path in SHARED or path == workflow or path.startswith(prefixes)
+        path in SHARED
+        or path == workflow
+        or (module == "backend" and path == b"docs/api/openapi.yaml")
+        or path.startswith(prefixes)
         for path in paths.split(b"\0")
     )
 

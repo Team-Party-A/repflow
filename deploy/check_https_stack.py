@@ -146,6 +146,8 @@ def check():
             original = verify()
             for path in (
                 "/health",
+                "/docs",
+                "/docs/openapi.yaml",
                 STATUS_PATH,
                 "/api/v1/auth/login",
                 "/api/v1/workouts",
@@ -156,10 +158,32 @@ def check():
                 ("/api/v1/auth/login", 405),
                 ("/api/v1/workouts", 401),
                 ("/api/v1/unknown", 404),
+                ("/docs/missing", 404),
+                ("/openapi.json", 404),
             ):
                 expect_route(
                     f"https://127.0.0.1:{https_port}{path}", status, tls_context
                 )
+            docs_url = f"https://127.0.0.1:{https_port}"
+            contract = source.parent / "docs/api/openapi.yaml"
+            for path, media_type, marker in (
+                ("/docs", "text/html", b"/docs/init.js"),
+                ("/docs/init.js", "text/javascript", b"supportedSubmitMethods: []"),
+                ("/docs/swagger-ui-bundle.js", "text/javascript", b"SwaggerUIBundle"),
+                ("/docs/swagger-ui.css", "text/css", b".swagger-ui"),
+                ("/docs/openapi.yaml", "application/yaml", None),
+                ("/docs/licenses.txt", "text/plain", b"Apache License"),
+            ):
+                with urlopen(
+                    docs_url + path, timeout=5, context=tls_context
+                ) as response:
+                    assert response.status == 200, path
+                    assert response.headers.get_content_type() == media_type, path
+                    body = response.read()
+                    if marker is None:
+                        assert body == contract.read_bytes(), path
+                    else:
+                        assert marker in body, path
             identity = {
                 "run_id": 81,
                 "attempt": 2,

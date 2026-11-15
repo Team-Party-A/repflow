@@ -26,7 +26,7 @@ RepFlow 是一个用 Apple Watch 自动计次的健身记录 App：开组前选�
 | 模块 | 技术栈 | 构建 | 测试 | 格式化 / lint |
 | --- | --- | --- | --- | --- |
 | watch、ios | SwiftUI（iOS + watchOS）；部署目标 iOS 17.2、watchOS 10.0；Xcode 27.1 | 在 `apps/apple/` 下：`xcodebuild build -scheme RepFlow -destination 'generic/platform=iOS Simulator'`（连同手表 App 一起构建） | `xcodebuild test -scheme RepFlow -destination 'platform=iOS Simulator,name=iPhone 17'`；`xcodebuild test -scheme RepFlowWatch -destination 'platform=watchOS Simulator,name=Apple Watch SE 3 (40mm)'`（XCTest） | `xcrun swift-format`（Xcode 自带，配置见 `apps/apple/.swift-format`） |
-| backend | FastAPI + PostgreSQL | `docker build --target runtime -t repflow-api:local backend`（仓库根目录） | `uv run --locked pytest --cov=app`（backend 内，需测试库） | `uv run --locked ruff format`、`uv run --locked ruff check` |
+| backend | FastAPI + PostgreSQL | `docker build --build-context api_contract=docs/api --target runtime -t repflow-api:local backend`（仓库根目录） | `uv run --locked pytest --cov=app`（backend 内，需测试库） | `uv run --locked ruff format`、`uv run --locked ruff check` |
 | ml | Python | — | `pytest` | `ruff format`、`ruff check` |
 | web | 待定 | 待定 | Cypress | ESLint + Prettier |
 | deploy | docker compose + nginx | Backend CI 构建并发布镜像 | `API_IMAGE=… TEST_IMAGE=… sh deploy/check.sh`（仓库根目录） | — |

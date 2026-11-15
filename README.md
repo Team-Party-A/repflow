@@ -24,4 +24,6 @@ repflow/
 
 参与开发前请先读 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [AGENTS.md](AGENTS.md)。
 
-后端骨架的本地检查、CI 发布、Rootless 部署和回退步骤见 [部署说明](docs/deployment.md)；选型取舍见 [ADR 0002](docs/adr/0002-backend-deployment.md)。
+在线 API 文档路径为 HTTPS 的 `/docs`，供助教和组员直接查看。[接口契约原文](docs/api/openapi.yaml)为 OpenAPI 1.0.0。
+
+后端的本地检查、CI 发布、Rootless 部署和回退步骤见 [部署说明](docs/deployment.md)；选型取舍见 [ADR 0002](docs/adr/0002-backend-deployment.md)。
