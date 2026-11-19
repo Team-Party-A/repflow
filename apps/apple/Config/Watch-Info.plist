@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>WKBackgroundModes</key>
+    <array><string>workout-processing</string></array>
+    <key>NSMotionUsageDescription</key>
+    <string>采集本次动作的加速度和角速度，供计次算法研究。</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>使用运动会话支持落腕后的传感器采样，不读取已有健康记录。</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>请求运动会话权限支持落腕采样；本录制模式不向健康 App 保存训练。</string>
+</dict>
+</plist>

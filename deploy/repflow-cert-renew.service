@@ -1,0 +1,12 @@
+[Unit]
+Description=RepFlow IP certificate renewal and nginx verification
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/repflow
+EnvironmentFile=%h/.config/repflow/tls.env
+ExecStart=/usr/bin/python3 %h/repflow/deploy/tls.py renew
+TimeoutStartSec=15min
+UMask=0077

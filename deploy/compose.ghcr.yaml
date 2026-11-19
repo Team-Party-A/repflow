@@ -1,0 +1,6 @@
+# 仅在 CI 已完成备用镜像同步后，与 compose.yaml 一起使用。
+services:
+  nginx:
+    image: ${NGINX_IMAGE:?Set NGINX_IMAGE to the verified GHCR digest}
+  db:
+    image: ${POSTGRES_IMAGE:?Set POSTGRES_IMAGE to the verified GHCR digest}

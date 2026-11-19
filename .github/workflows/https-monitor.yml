@@ -1,0 +1,38 @@
+name: HTTPS monitor
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      test_alert:
+        description: "故意让本次检查失败，用于确认你能收到 GitHub 通知"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    if: vars.HTTPS_MONITOR_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Test failure notification when explicitly requested
+        if: github.event_name == 'workflow_dispatch' && inputs.test_alert
+        run: |
+          echo 'Intentional HTTPS alert delivery test'
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify public HTTPS and renewal status
+        env:
+          HTTPS_MONITOR_IP: ${{ secrets.HTTPS_MONITOR_IP }}
+          HTTPS_MONITOR_PORT: ${{ vars.HTTPS_MONITOR_PORT || '8080' }}
+        run: |
+          docker run --rm --network host -e HTTPS_MONITOR_IP -e HTTPS_MONITOR_PORT \
+            -v "$PWD/deploy/https_probe.py:/probe.py:ro" \
+            python:3.14.9-slim-trixie@sha256:b347e2dcbc7f0b6f9fb7182e9da6a187fb10ae715e0692518c1aed0eec94a700 \
+            python /probe.py

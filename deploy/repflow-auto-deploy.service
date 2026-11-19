@@ -1,0 +1,11 @@
+[Unit]
+Description=Pull and verify a RepFlow dev release
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/repflow/tls.env
+ExecStart=/usr/bin/python3 %h/.local/lib/repflow/auto_deploy.py
+TimeoutStartSec=16min
+UMask=0077

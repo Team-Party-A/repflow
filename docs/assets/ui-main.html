@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>RepFlow 规范总览</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.n{font-family:'Barlow Condensed','SF Pro Display',sans-serif;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.01em}
+.k{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#9D9C94;margin:0 0 16px}
+</style>
+</head>
+<body>
+<div style="width: 1360px; height: 1240px; box-sizing: border-box; padding: 56px 64px; background: #0B0B0C; color: #F2F1EA; font-family: 'PingFang SC', -apple-system, 'Hiragino Sans GB', sans-serif; display: flex; flex-direction: column; gap: 40px">
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-end">
+    <div style="display: flex; align-items: baseline; gap: 20px">
+      <div class="n" style="font-size: 88px; color: #D4FF3A">RepFlow</div>
+      <div style="font-size: 22px; font-weight: 600">UI 方案 · Chalk &amp; Volt</div>
+    </div>
+    <div style="font-size: 14px; color: #9D9C94; text-align: right; line-height: 1.6">重设计提案 · 对照 PR #27<br>2026-10-19 · 草案，待例会评审</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+    <div style="background: #1A1B1D; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 10px">
+      <div class="n" style="font-size: 40px; color: #D4FF3A">01</div>
+      <div style="font-size: 20px; font-weight: 600">数字最大，其余让位</div>
+      <div style="font-size: 15px; line-height: 1.6; color: #9D9C94">抬腕只看一眼：次数用超窄超粗字体占满屏宽，动作名、组序号退成一行小字。</div>
+    </div>
+    <div style="background: #1A1B1D; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 10px">
+      <div class="n" style="font-size: 40px; color: #D4FF3A">02</div>
+      <div style="font-size: 20px; font-weight: 600">只有一个强调色</div>
+      <div style="font-size: 15px; line-height: 1.6; color: #9D9C94">Volt 只给两样东西：当前步骤的主操作、机器实时估计的次数。人确认过的数字一律白色（浅色模式为墨色）。</div>
+    </div>
+    <div style="background: #1A1B1D; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 10px">
+      <div class="n" style="font-size: 40px; color: #D4FF3A">03</div>
+      <div style="font-size: 20px; font-weight: 600">状态 = 图标 + 文字 + 色</div>
+      <div style="font-size: 15px; line-height: 1.6; color: #9D9C94">琥珀色 = 还有事没做完（待核对、待传、待同步）；红色 = 失败或删除。成功不用绿色，用中性勾号，避免和 Volt 抢眼。</div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px">
+    <div>
+      <div class="k">颜色 · 8 个 token</div>
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px">
+        <div style="display: grid; grid-template-columns: 110px 150px 150px minmax(0, 1fr); gap: 12px; color: #9D9C94; font-size: 12px; padding: 0 0 4px">
+          <div>Token</div><div>深色 / Watch</div><div>浅色</div><div>用途</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px 150px 150px minmax(0, 1fr); gap: 12px; align-items: center">
+          <div style="font-family: ui-monospace, Menlo, monospace">ground</div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #000000; border: 1px solid #3A3B3E"></div><span>#000000</span></div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #F4F3EE"></div><span>#F4F3EE</span></div>
+          <div style="color: #9D9C94">页面底；Watch 永远纯黑</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px 150px 150px minmax(0, 1fr); gap: 12px; align-items: center">
+          <div style="font-family: ui-monospace, Menlo, monospace">surface</div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #1A1B1D; border: 1px solid #3A3B3E"></div><span>#1A1B1D</span></div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #FFFFFF"></div><span>#FFFFFF</span></div>
+          <div style="color: #9D9C94">卡片、列表行</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px 150px 150px minmax(0, 1fr); gap: 12px; align-items: center">
+          <div style="font-family: ui-monospace, Menlo, monospace">raised</div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #2A2B2E"></div><span>#2A2B2E</span></div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #ECEBE4"></div><span>#ECEBE4</span></div>
+          <div style="color: #9D9C94">次按钮、步进器、分段控件</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px 150px 150px minmax(0, 1fr); gap: 12px; align-items: center">
+          <div style="font-family: ui-monospace, Menlo, monospace">text</div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #F2F1EA"></div><span>#F2F1EA</span></div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #121212; border: 1px solid #3A3B3E"></div><span>#121212</span></div>
+          <div style="color: #9D9C94">正文、已确认的数字</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px 150px 150px minmax(0, 1fr); gap: 12px; align-items: center">
+          <div style="font-family: ui-monospace, Menlo, monospace">text-2</div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #9D9C94"></div><span>#9D9C94</span></div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #5E5D57"></div><span>#5E5D57</span></div>
+          <div style="color: #9D9C94">日期、单位、说明</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px 150px 150px minmax(0, 1fr); gap: 12px; align-items: center">
+          <div style="font-family: ui-monospace, Menlo, monospace; color: #D4FF3A">volt</div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #D4FF3A"></div><span>#D4FF3A</span></div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #121212; border: 1px solid #3A3B3E; display: flex; align-items: center; justify-content: center"><div style="width: 12px; height: 12px; border-radius: 6px; background: #D4FF3A"></div></div><span>只放墨色上</span></div>
+          <div style="color: #9D9C94">主操作、实时计次</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px 150px 150px minmax(0, 1fr); gap: 12px; align-items: center">
+          <div style="font-family: ui-monospace, Menlo, monospace; color: #FFB547">amber</div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #FFB547"></div><span>#FFB547</span></div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #8A5300"></div><span>#8A5300</span></div>
+          <div style="color: #9D9C94">待处理：待核对 / 待传 / 待同步 / 计次异常</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px 150px 150px minmax(0, 1fr); gap: 12px; align-items: center">
+          <div style="font-family: ui-monospace, Menlo, monospace; color: #FF6B5B">red</div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #FF6B5B"></div><span>#FF6B5B</span></div>
+          <div style="display: flex; gap: 8px; align-items: center"><div style="width: 28px; height: 28px; border-radius: 8px; background: #B8261A"></div><span>#B8261A</span></div>
+          <div style="color: #9D9C94">同步失败、删除、放弃</div>
+        </div>
+      </div>
+      <div style="margin-top: 16px; font-size: 13px; line-height: 1.6; color: #9D9C94">对比度（WCAG）：Volt/黑 18.2 · text-2 深/卡片 6.3 · 浅/底 6.0 · amber 9.8 / 5.7 · red 6.2 / 5.7，全部 ≥ 4.5。<br>Volt 在浅底上只有 1.04，所以浅色模式的主按钮是「墨底 + Volt 字」，深色是「Volt 底 + 墨字」。</div>
+    </div>
+
+    <div>
+      <div class="k">字体 · SF Pro + SF Pro Compressed</div>
+      <div style="background: #1A1B1D; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 18px">
+        <div style="display: flex; align-items: flex-end; gap: 16px">
+          <div class="n" style="font-size: 132px; color: #D4FF3A">10</div>
+          <div style="font-size: 13px; line-height: 1.6; color: #9D9C94; padding-bottom: 12px">计次数字<br>Compressed Heavy · 等宽数字<br>Watch 88 pt · iPhone 64 pt</div>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 16px; border-top: 1px solid #2A2B2E; padding-top: 16px">
+          <div class="n" style="font-size: 44px; font-weight: 700; width: 92px">114</div>
+          <div style="font-size: 13px; color: #9D9C94">数据数字 · Compressed Bold · 34 pt</div>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 16px">
+          <div style="font-size: 28px; font-weight: 700; width: 92px">今天</div>
+          <div style="font-size: 13px; color: #9D9C94">大标题 · iPhone 34 Bold / Watch 17 Semibold</div>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 16px">
+          <div style="font-size: 17px; width: 92px">哑铃弯举</div>
+          <div style="font-size: 13px; color: #9D9C94">正文 · 17 / 16 pt</div>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 16px">
+          <div style="font-size: 13px; color: #9D9C94; width: 92px">第 2 组</div>
+          <div style="font-size: 13px; color: #9D9C94">辅助 · 13 pt，最小不低于 13</div>
+        </div>
+        <div style="font-size: 12px; line-height: 1.6; color: #9D9C94; border-top: 1px solid #2A2B2E; padding-top: 14px">SwiftUI：<span style="font-family: ui-monospace, Menlo, monospace; color: #F2F1EA">.font(.system(size: 88, weight: .heavy)).fontWidth(.compressed).monospacedDigit()</span><br>fontWidth 需 iOS 16.4 / watchOS 9.4，在 D-16 基线内。稿中用 Barlow Condensed 近似。</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px">
+    <div>
+      <div class="k">状态标签 · 深色 / 浅色</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px">
+        <div style="display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #2A2B2E; color: #FFB547; font-size: 14px; font-weight: 600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>待核对</div>
+        <div style="display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #2A2B2E; color: #FFB547; font-size: 14px; font-weight: 600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>待传到手机</div>
+        <div style="display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #2A2B2E; color: #FFB547; font-size: 14px; font-weight: 600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>待同步</div>
+        <div style="display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #2A2B2E; color: #9D9C94; font-size: 14px; font-weight: 600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>已同步</div>
+        <div style="display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #2A2B2E; color: #FF6B5B; font-size: 14px; font-weight: 600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5"/><path d="M12 17.5v.01"/></svg>同步失败</div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; padding: 14px; border-radius: 16px; background: #F4F3EE">
+        <div style="display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #FFF1D6; color: #8A5300; font-size: 14px; font-weight: 600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>待同步</div>
+        <div style="display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #ECEBE4; color: #5E5D57; font-size: 14px; font-weight: 600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>已同步</div>
+        <div style="display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: #FDE5E2; color: #B8261A; font-size: 14px; font-weight: 600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5"/><path d="M12 17.5v.01"/></svg>同步失败</div>
+      </div>
+      <div style="margin-top: 14px; font-size: 13px; line-height: 1.6; color: #9D9C94">文案沿用 PR #27 的术语（待传到手机 ≠ 待同步）。图标对应 SF Symbols：pencil · clock · checkmark · exclamationmark.triangle。</div>
+    </div>
+
+    <div>
+      <div class="k">按钮 · 每屏只有一个 Volt</div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <button style="height: 52px; border: 0; border-radius: 999px; background: #D4FF3A; color: #0B0B0C; font: 600 17px 'PingFang SC', -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; gap: 8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5v14l11-7z"/></svg>开始本组</button>
+        <button style="height: 52px; border: 0; border-radius: 999px; background: #2A2B2E; color: #F2F1EA; font: 600 17px 'PingFang SC', -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>结束本组</button>
+        <button style="height: 52px; border: 0; border-radius: 999px; background: #121212; color: #D4FF3A; font: 600 17px 'PingFang SC', -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; gap: 8px; outline: 1px solid #3A3B3E"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>浅色主按钮</button>
+        <button style="height: 52px; border: 0; border-radius: 999px; background: transparent; color: #FF6B5B; font: 600 17px 'PingFang SC', -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; gap: 8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>删除训练</button>
+      </div>
+      <div style="margin-top: 14px; font-size: 13px; line-height: 1.6; color: #9D9C94">主按钮全宽胶囊，高 ≥ 44 pt；「结束本组」是正常操作，用中性色不用红；破坏性操作只用红字、不做红底，且与主按钮隔开。圆角：按钮全圆，卡片 18 pt，Watch 列表行 12 pt。</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

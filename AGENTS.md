@@ -1,5 +1,3 @@
-> **草案 v0，待第 1 次组会表决**
-
 # AGENTS.md
 
 本文件是人和 agent 共用的工程规范，也是唯一的规范来源。Codex 直接读取本文件；Claude Code 通过根目录 `CLAUDE.md` 中的 `@AGENTS.md` 加载本文件。不要在 `CLAUDE.md` 里另写规则。
@@ -27,11 +25,13 @@ RepFlow 是一个用 Apple Watch 自动计次的健身记录 App：开组前选�
 
 | 模块 | 技术栈 | 构建 | 测试 | 格式化 / lint |
 | --- | --- | --- | --- | --- |
-| watch、ios | SwiftUI（iOS + watchOS） | `xcodebuild build`（scheme 待定） | `xcodebuild test`（XCTest、XCUITest） | SwiftFormat 或 SwiftLint（二选一，待定） |
-| backend | FastAPI + PostgreSQL | 待定 | `pytest --cov` | `ruff format`、`ruff check` |
+| watch、ios | SwiftUI（iOS + watchOS）；部署目标 iOS 17.2、watchOS 10.0；Xcode 27.1 | 在 `apps/apple/` 下：`xcodebuild build -scheme RepFlow -destination 'generic/platform=iOS Simulator'`（连同手表 App 一起构建） | `xcodebuild test -scheme RepFlow -destination 'platform=iOS Simulator,name=iPhone 17'`；`xcodebuild test -scheme RepFlowWatch -destination 'platform=watchOS Simulator,name=Apple Watch SE 3 (40mm)'`（XCTest） | `xcrun swift-format`（Xcode 自带，配置见 `apps/apple/.swift-format`） |
+| backend | FastAPI + PostgreSQL | `docker build --target runtime -t repflow-api:local backend`（仓库根目录） | `uv run --locked pytest --cov=app`（backend 内，需测试库） | `uv run --locked ruff format`、`uv run --locked ruff check` |
 | ml | Python | — | `pytest` | `ruff format`、`ruff check` |
 | web | 待定 | 待定 | Cypress | ESLint + Prettier |
-| deploy | docker compose + nginx | `docker compose build` | 健康检查（待定） | — |
+| deploy | docker compose + nginx | Backend CI 构建并发布镜像 | `API_IMAGE=… TEST_IMAGE=… sh deploy/check.sh`（仓库根目录） | — |
+
+系统支持范围：工程的 Deployment Target 为 iOS 17.2、watchOS 10.0（Xcode 只能填到次版本号）；兼容验证基线为 iOS 17.2.1、watchOS 10.0 真机，最低版本验收在基线真机上做。
 
 ## 3. 编码规范
 
@@ -108,9 +108,11 @@ smoothed = moving_average(samples, window=5)
 与 [CONTRIBUTING.md](CONTRIBUTING.md) 一致，摘要如下：
 
 - 从 `dev` 拉出 `feature/<模块>-<简述>` 或 `bugfix/<简述>`，完成后经 PR 合回 `dev`。
-- 提交信息：`<type>(<scope>): <subject>`，例如 `feat(watch): add peak-based rep counter`。
+- 提交信息：`<type>(<scope>): <subject>`，例如 `feat(watch): 新增基于峰值的计次`。
   - type：`feat`、`fix`、`refactor`、`docs`、`style`、`test`、`perf`、`ci`、`chore`
   - scope：`watch`、`ios`、`backend`、`web`、`ml`、`deploy`、`docs`
+  - subject、PR 描述和文档以中文为主；代码标识符、命令和专有名词保持原文。
+- PR 标题必须符合上面的提交信息格式：`dev` 和 `main` 只允许 squash 合并，squash commit 默认用 PR 标题。
 - 一个提交只做一件事；一个 PR 只对应一个 Issue，diff 尽量不超过 400 行。
 
 ## 5. 接口契约
@@ -119,8 +121,9 @@ smoothed = moving_average(samples, window=5)
 
 | 契约 | 位置 | 状态 |
 | --- | --- | --- |
-| 后端 API | `docs/api/openapi.yaml` | 第 8 周前写好并冻结 |
-| 传感器录制数据格式 | `docs/data/01-sensor-recording-format.md` | 第 8 周冻结 |
+| 后端 API | `docs/api/openapi.yaml` | 已冻结（1.0.0，#49） |
+| 手表 ↔ 手机消息格式 | `docs/data/02-watch-phone-messages.md` | 已冻结（#51） |
+| 传感器录制数据格式 | `docs/data/01-sensor-recording-format.md` | 已冻结（format_version 1.0，#46） |
 
 客户端按契约实现；后端还没完成时，客户端先连 mock server。
 
@@ -132,7 +135,8 @@ smoothed = moving_average(samples, window=5)
 - 不删除、不跳过已有测试。
 - 不推送到 `dev` 和 `main`。
 - 不做大规模重构、不删除文件，除非人已在 Issue 或对话中明确确认。
-- 不索取、不使用生产服务器的 SSH 权限和服务器上的 `.env`。
+- 经负责人明确授权，可以在指定服务器与任务范围内使用 SSH 执行部署、检查和排障；同一任务中已有授权持续有效，无需逐条重复确认。可以按任务需要在服务器直接生成服务密码并安全保存配置，不回显明文；不得读取、回显或传播已有真实 `.env`、SSH 私钥、token 等凭据内容。个人账号登录或授权确需本人交互时，再由负责人操作。
+- SSH 授权在对应 Issue 留下记录。删除数据卷、修改防火墙或云安全组、sshd、sudoers 等操作，需要针对具体操作单独授权；任务级 SSH 授权不自动包含这些操作，已有的具体授权无需重复确认。
 
 ## 7. 实现原则
 
@@ -142,17 +146,25 @@ smoothed = moving_average(samples, window=5)
    - 需要新增依赖
    - 需要改目录结构或 CI 配置
    - 需求有歧义
-3. **只在 Issue 下写进度评论。** 不改看板状态，不新建 Issue，不关闭 Issue。
+3. **Issue 操作有边界。**
+   - **新建**：可以新建 Issue。必须选模板（功能、Bug、任务），填好标签、Milestone 和验收标准；正文末尾写「由 <Claude Code / Codex> 起草，会话：<会话名>」。一次会话要建超过 3 个时，先把清单给人确认再建。别人模块的问题可以建 Issue 并 @ 该模块负责人，但不改他的代码。
+   - **开工**：agent 新建的 Issue，要等负责人确认验收标准、拖到 Todo 之后，才能开始实现。
+   - **修复**：从 `dev` 拉 `feature/*` 或 `bugfix/*` 分支，实现并写测试，推送该分支，开 PR 并写 `Closes #N`。不合并 PR。
+   - **关闭**：做完的 Issue 只能靠合入 PR 时的 `Closes #N` 自动关闭，不手动关。手动关闭只限三种情况：重复、无法复现、已不需要。关闭前必须评论写明原因（重复的附上原 Issue 链接），并 @ 负责人。
+   - **看板**：不改 Status 字段。新建进 Backlog、关闭进 Done，都由 Project 的内置工作流自动完成。
+   - 收工前在 Issue 下写一条进度评论。
 
 ## 8. 单个任务的工作流
 
-1. 人在 Issue 里写清目标和验收标准（这一步不交给 AI）。
+1. 人在 Issue 里写清目标和验收标准；也可以由 agent 起草，负责人确认验收标准后才开工（见第 7 条第 3 点）。
 2. 从 `dev` 拉出 feature 分支。
 3. agent 根据 Issue 和相关文件实现，同时写单元测试。
 4. 作者逐段读懂代码，在本地跑通测试和格式化；看不懂的地方让 agent 解释。
-5. 按规范提交，开 PR，填写模板（包括 AI 参与说明）。
+5. 按规范提交，开 PR（人或 agent 都可以开），填写模板（包括 AI 参与说明）。还有提交没推完时，PR 只能是 Draft，不请求审查、不邀请作者以外的人来看；全部提交推送完毕后再转为 Ready for review 并请求审查。转为 Ready 后还要再推提交的，先转回 Draft（`gh pr ready <编号> --undo`），推完再转回 Ready，并请审查人重新审查。
 6. 另一名成员审查，批准由人点。
-7. CI 通过后合入，Issue 自动关闭。
+7. 作者在 PR 转为 Ready for review 时开启自动合入（Draft 状态不能开启），非作者批准且 CI 通过后自动 squash 合入（见 CONTRIBUTING.md 第 3 节）；没有非作者批准不能合入。Issue 经 `Closes #N` 自动关闭，分支自动删除。改契约文件的 PR 例外：等所有受影响模块负责人批准后再开启自动合入（见 CONTRIBUTING.md 第 3 节）。
+
+第 6 步「另一名成员审查」只有一个例外：Wiki [团队章程](https://github.com/Team-Party-A/repflow/wiki/团队章程)「组长职责」一节的紧急通道，组长可以经 PR 绕过审查合入（仍不能直推或强推），适用条件和事后要求以章程为准。工程规范以本文件为准，团队分工和组长权限以章程为准。agent 不得使用紧急通道，也不得以它为由合并 PR。
 
 ## 9. 交付前必须跑通的检查
 
@@ -160,9 +172,10 @@ smoothed = moving_average(samples, window=5)
 
 | 模块 | 检查命令 |
 | --- | --- |
-| backend、ml | `ruff format --check . && ruff check . && pytest` |
-| watch、ios | SwiftFormat / SwiftLint 检查（待定） + `xcodebuild test`（scheme 与 destination 待定） |
+| backend | `uv run --locked ruff format --check . && uv run --locked ruff check . && uv run --locked pytest --cov=app`（uv 0.13.5，需测试库；完整容器命令见 [部署说明](docs/deployment.md)） |
+| ml | `ruff format --check . && ruff check . && pytest` |
+| watch、ios | 在 `apps/apple/` 下：`xcrun swift-format lint --strict --recursive .` + 第 2 节的两条 `xcodebuild test` |
 | web | ESLint + Prettier 检查 + 构建（命令待定） |
-| deploy | `docker compose config` |
+| deploy | `docker compose config --quiet`（指定配置和环境变量，见 [部署说明](docs/deployment.md)）及 `sh deploy/check.sh` |
 
 任何一项失败都不能交付；不能为了通过检查而删除或跳过测试。

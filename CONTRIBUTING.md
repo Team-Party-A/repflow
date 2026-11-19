@@ -1,5 +1,3 @@
-> **草案 v0，待第 1 次组会表决**
-
 # 贡献指南
 
 本文件规定分支、提交信息、PR 与 Issue 的用法。人和 agent 都要遵守；agent 额外遵守 [AGENTS.md](AGENTS.md)。
@@ -15,8 +13,13 @@
 | `release/vX.Y` | 阶段检查前冻结用 | 只修 bug，合入 `main` 和 `dev` |
 
 - `<模块>` 取值与提交信息的 scope 一致：`watch`、`ios`、`backend`、`web`、`ml`、`deploy`、`docs`。
-- `main` 和 `dev` 两个受保护分支都要开启：必须经过 PR、至少 1 名非作者批准、CI 通过、禁止强制推送。（保护规则在组会表决后配置。）
+- `main` 和 `dev` 由 ruleset `protect-dev-main` 保护，必须经过 PR、至少 1 名非作者批准、只允许 squash 合并，禁止强制推送和删除。当前必需检查为 `gitleaks`，Apple 与 Backend 门禁由组长验收后加入 ruleset。
+- PR 合入后源分支自动删除。
 - 任何人都不直接向 `main` 或 `dev` 推送。
+
+每个 PR 和合入队列都返回 `Apple CI gate`、`Backend CI gate` 和 `gitleaks`。Apple 完整检查覆盖 `apps/apple/`，Backend 完整检查覆盖 `backend/` 和 `deploy/`。修改相应工作流或共用路径判断脚本也会触发对应检查。纯文档改动的两个门禁会说明为何跳过完整检查，路径判断或测试失败时门禁失败。
+
+组长先用纯文档 PR 和代码 PR 确认 GitHub Actions 上报的门禁名称，再用单独针对 `dev` 的 ruleset 加入两个必需检查并启用 squash 合入队列。用进入队列后的运行确认三项检查都返回结果。`main` 在发布分支带齐工作流后按同样步骤配置。紧急通道仍按团队章程执行。
 
 ## 2. 提交信息
 
@@ -26,16 +29,17 @@
 <type>(<scope>): <subject>
 ```
 
-示例：`feat(watch): add peak-based rep counter`
+示例：`feat(watch): 新增基于峰值的计次`
 
 - **type**：`feat`、`fix`、`refactor`、`docs`、`style`、`test`、`perf`、`ci`、`chore`
 - **scope**：`watch`、`ios`、`backend`、`web`、`ml`、`deploy`、`docs`
-- **subject**：全组统一用一种语言（中文或英文，第 1 次组会决定），不混用。
+- **subject**：以中文为主；代码标识符、命令和专有名词保持原文。PR 描述、Issue 和文档同样以中文为主。
 - 原子化、频繁提交：一个提交只做一件事。
 
 ## 3. PR 与代码审查
 
 - 一个 PR 对应一个 Issue，描述里写 `Closes #<编号>`。
+- **PR 标题必须符合第 2 节的提交信息格式**。`dev` 和 `main` 只允许 squash 合并，squash commit 默认用 PR 标题，因此 PR 标题就是 `dev` 上留下的那条提交信息。
 - diff 尽量控制在 400 行以内（生成文件不算）。AI 一次生成的大块代码要拆开提交。
 - 按 [PR 模板](.github/pull_request_template.md) 填写，以下各项必填：
   - 关联 Issue
@@ -45,6 +49,9 @@
   - **AI 参与说明**：用了哪个工具、会话名、哪些部分由 AI 生成、人工验证或改动了什么
   - 「完成的定义」勾选项
 - 至少 1 名非作者成员批准后才能合入。可以用另一个 AI 工具出第二意见，但批准必须由人点。
+- **作者在 PR 转为 Ready for review 时开启自动合入**（还有提交没推完的 PR 保持 Draft，见 AGENTS.md 第 8 节；PR 页面的 Enable auto-merge，或 `gh pr merge <编号> --auto --squash`），非作者批准且必需检查通过后自动 squash 合入，不需要再有人手动合并。组长开的 PR 同样适用。合入始终排在非作者批准之后，审查记录以批准为准，与谁开启自动合入无关。
+- 启用合入队列的分支使用 PR 页面的入队操作，或 `gh pr merge <编号> --auto`。squash 方式由队列配置决定，队列也会检查合成提交。
+- **例外：改动接口契约文件（见 AGENTS.md 第 5 节）的 PR，开 PR 时不开启自动合入。** 作者在 PR 描述里列出所有受影响模块的负责人，并请他们审查。等除作者本人以外的负责人都批准后，再由作者开启自动合入。作者本人就是受影响模块负责人时，算作已确认。
 - 审查人重点看：
   - 是否符合接口契约和本规范
   - 有没有测试
@@ -84,3 +91,36 @@
 - `.env` 不入库，只提交 `.env.example`；CI 里的密钥放 GitHub Secrets；签名证书不入库。
 - 录制的传感器数据和模型权重体积大，不直接提交，用 Git LFS 或网盘存放。
 - 一旦有密钥被提交，立即更换该密钥，并通知组长。
+
+### 本地提交检查
+
+每次克隆仓库后，在仓库根目录执行一次：
+
+```sh
+sh scripts/install-git-hooks.sh
+```
+
+脚本下载固定版本 gitleaks 8.30.1，核对官方 SHA-256 后，把工具与 Git 原生
+`pre-commit` 钩子装到当前仓库的 Git 私有目录。支持 macOS/Linux 的 ARM64/x64，
+Windows 可在 WSL 执行；需要 Git、curl、tar 和 SHA-256 校验工具，无需 Go、Docker
+或 pre-commit。重复安装可更新本项目钩子；已有其他钩子或自定义 `core.hooksPath`
+时会停止，不覆盖。每个成员安装成功后在 #31 回复确认。
+
+提交时检查暂存区，发现疑似密钥或工具执行失败就阻止提交，日志中的值会脱敏。
+请移除真实密钥、改用环境变量后重新暂存。遇到误报，请先请审查人确认，再单独
+评审最小范围的规则调整，不直接跳过检查，不整目录排除，不把 `.env` 加进白名单。
+
+手动检查当前分支的完整提交历史（包括后来已删除的内容）：
+
+```sh
+common_dir=$(git rev-parse --git-common-dir)
+"$common_dir/repflow-tools/gitleaks/8.30.1/gitleaks" git \
+  --config .gitleaks.toml --redact=100 --verbose \
+  --log-opts="--full-history -m HEAD" .
+```
+
+每个 PR、合入队列及 `dev`/`main` 的推送运行相同 CLI 历史扫描；本地钩子不能代替 CI。
+可执行 `sh scripts/test-git-hooks.sh` 在临时仓库中验证正常提交、暂存区拦截、
+脱敏、缺少工具/配置错误、已有钩子保护，以及中间提交和合并提交的历史检测。
+Secret scanning 和 Push protection 由管理员在 GitHub 设置中启用并在 #31 确认。
+假密钥验证使用独立测试 PR，不合入 `dev`/`main`，在正式 PR 附脱敏日志与运行链接。
