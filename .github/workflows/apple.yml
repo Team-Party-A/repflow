@@ -56,17 +56,6 @@ jobs:
           fi
           printf 'Runner image: %s %s\n' "$ImageOS" "$ImageVersion"
           xcrun simctl list devices available
-      - name: Create paired simulators for the pinned runtimes
-        run: |
-          phone_id=$(xcrun simctl create 'RepFlow CI iPhone 17' \
-            'iPhone 17' com.apple.CoreSimulator.SimRuntime.iOS-27-0)
-          printf 'REPFLOW_CI_PHONE_ID=%s\n' "$phone_id" >> "$GITHUB_ENV"
-          watch_id=$(xcrun simctl create 'RepFlow CI Apple Watch SE 3 (40mm)' \
-            'Apple Watch SE 3 (40mm)' com.apple.CoreSimulator.SimRuntime.watchOS-27-0)
-          printf 'REPFLOW_CI_WATCH_ID=%s\n' "$watch_id" >> "$GITHUB_ENV"
-          # Companion Watch targets require a paired phone to appear as a destination.
-          xcrun simctl pair "$watch_id" "$phone_id"
-          xcrun simctl list pairs
       - name: Check Swift formatting
         run: xcrun swift-format lint --strict --recursive .
       - name: Build iOS app and embedded Watch app
@@ -77,13 +66,13 @@ jobs:
       - name: Run iOS XCTest on iOS 27.0
         run: |
           xcodebuild test -project RepFlow.xcodeproj -scheme RepFlow \
-            -configuration Debug -destination "platform=iOS Simulator,id=$REPFLOW_CI_PHONE_ID" \
+            -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17,OS=27.0' \
             -destination-timeout 120 -derivedDataPath "$RUNNER_TEMP/repflow-derived-data" \
             -resultBundlePath "$RUNNER_TEMP/RepFlow-iOS.xcresult" CODE_SIGNING_ALLOWED=NO
       - name: Run watchOS XCTest on watchOS 27.0
         run: |
           xcodebuild test -project RepFlow.xcodeproj -scheme RepFlowWatch \
-            -configuration Debug -destination "platform=watchOS Simulator,id=$REPFLOW_CI_WATCH_ID" \
+            -configuration Debug -destination 'platform=watchOS Simulator,name=Apple Watch SE 3 (40mm),OS=27.0' \
             -destination-timeout 120 -derivedDataPath "$RUNNER_TEMP/repflow-derived-data" \
             -resultBundlePath "$RUNNER_TEMP/RepFlow-watchOS.xcresult" CODE_SIGNING_ALLOWED=NO
       - name: Summarize successful checks
@@ -95,15 +84,6 @@ jobs:
             printf 'Passed: strict formatting, iOS app with embedded Watch app build, and both XCTest schemes.\n\n'
             printf 'Minimum-version physical-device validation remains separate.\n'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Remove this job's simulators
-        if: always()
-        run: |
-          if [ -n "${REPFLOW_CI_WATCH_ID:-}" ]; then
-            xcrun simctl delete "$REPFLOW_CI_WATCH_ID"
-          fi
-          if [ -n "${REPFLOW_CI_PHONE_ID:-}" ]; then
-            xcrun simctl delete "$REPFLOW_CI_PHONE_ID"
-          fi
 
   gate:
     name: Apple CI gate
