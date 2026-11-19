@@ -1,0 +1,226 @@
+{
+  "executed_at": "2026-11-19T15:38:21.443760+00:00",
+  "contract_version": "1.0.0",
+  "tls_verification": true,
+  "results": [
+    {
+      "case": "TC-ACC-001 anonymous query",
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "AUTH_REQUIRED"
+    },
+    {
+      "case": "TC-ACC-001 anonymous upload",
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "AUTH_REQUIRED"
+    },
+    {
+      "case": "TC-ACC-001 anonymous delete",
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "AUTH_REQUIRED"
+    },
+    {
+      "case": "TC-ACC-001 register a",
+      "expected_status": 201,
+      "actual_status": 201,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-ACC-001 register b",
+      "expected_status": 201,
+      "actual_status": 201,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-ACC-001 duplicate username",
+      "expected_status": 409,
+      "actual_status": 409,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "USERNAME_TAKEN"
+    },
+    {
+      "case": "TC-ACC-001 wrong password",
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "INVALID_CREDENTIALS"
+    },
+    {
+      "case": "TC-ACC-001 independent login",
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-SYNC-001 upload revision 1",
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-SYNC-001 identical upload retry",
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-SYNC-001 query exactly one complete workout",
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-ACC-001 B query cannot see A",
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-ACC-001 B overwrite A rejected",
+      "expected_status": 404,
+      "actual_status": 404,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "NOT_FOUND"
+    },
+    {
+      "case": "TC-ACC-001 B delete A rejected",
+      "expected_status": 404,
+      "actual_status": 404,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "NOT_FOUND"
+    },
+    {
+      "case": "TC-SYNC-002 same revision different content",
+      "expected_status": 409,
+      "actual_status": 409,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "REVISION_CONFLICT",
+      "current_revision": 1
+    },
+    {
+      "case": "TC-SYNC-002 higher revision edit",
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-SYNC-002 stale upload",
+      "expected_status": 409,
+      "actual_status": 409,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "REVISION_CONFLICT",
+      "current_revision": 2
+    },
+    {
+      "case": "TC-SYNC-002 query retains edited content",
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-SYNC-002 stale delete",
+      "expected_status": 409,
+      "actual_status": 409,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "REVISION_CONFLICT",
+      "current_revision": 2
+    },
+    {
+      "case": "TC-SYNC-002 delete revision 3",
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-SYNC-002 identical delete retry",
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-SYNC-002 stale delete retry",
+      "expected_status": 409,
+      "actual_status": 409,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "REVISION_CONFLICT",
+      "current_revision": 3
+    },
+    {
+      "case": "TC-SYNC-002 replay cannot restore deleted workout",
+      "expected_status": 410,
+      "actual_status": 410,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "WORKOUT_DELETED"
+    },
+    {
+      "case": "TC-SYNC-002 query excludes deleted workout",
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-ACC-001 logout current session",
+      "expected_status": 204,
+      "actual_status": 204,
+      "pass": true,
+      "cache_no_store": true
+    },
+    {
+      "case": "TC-ACC-001 revoked token rejected",
+      "expected_status": 401,
+      "actual_status": 401,
+      "pass": true,
+      "cache_no_store": true,
+      "error_code": "AUTH_REQUIRED"
+    },
+    {
+      "case": "TC-ACC-001 independent session still valid",
+      "expected_status": 200,
+      "actual_status": 200,
+      "pass": true,
+      "cache_no_store": true
+    }
+  ],
+  "data_kind": "Disposable interface-test fixtures; not physical training or accuracy evidence.",
+  "cleanup": {
+    "account_deletion_supported": false,
+    "workout_deleted": true,
+    "session_revocation": [
+      true,
+      true,
+      true
+    ],
+    "account_a_query_empty": true,
+    "accounts_retained": 2,
+    "note": "No account deletion endpoint; account rows and minimal tombstones retained. No physical account purge performed."
+  }
+}
