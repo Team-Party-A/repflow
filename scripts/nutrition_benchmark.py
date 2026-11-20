@@ -275,22 +275,27 @@ def score(reference, ref_items, meals, items):
             seen = set()
             visibility = defaultdict(Counter)
             for r in items:
-                if (
-                    r["sample"] not in selected
-                    or r["stage"] != stage
-                    or not r["matched_or_missed_or_extra"]
-                ):
+                if r["sample"] not in selected or r["stage"] != stage:
                     continue
-                outcome = r["matched_or_missed_or_extra"]
-                if outcome not in ("matched", "missed", "extra"):
-                    raise ValueError("逐项对齐请使用 matched、missed 或 extra")
                 ident = (r["sample"], r["reference_ingredient_id"])
-                if outcome != "extra":
+                visible = r["visible_before_inference"] or "unlabelled"
+                if ident in weights:
+                    visibility[visible]["reference"] += 1
+                outcome = r["matched_or_missed_or_extra"]
+                if not outcome:
+                    continue
+                if outcome not in ("matched", "missed", "extra", "visible_unlabelled"):
+                    raise ValueError(
+                        "逐项对齐须使用 matched、missed、extra 或 visible_unlabelled"
+                    )
+                if outcome in ("matched", "missed"):
                     if ident not in weights or ident in seen:
                         raise ValueError("逐项对齐有重复或无效的参考食材")
                     seen.add(ident)
+                elif r["reference_ingredient_id"]:
+                    raise ValueError("额外预测应单独追加一行，参考食材 ID 留空")
                 counts[outcome] += 1
-                visibility[r["visible_before_inference"] or "unlabelled"][outcome] += 1
+                visibility[visible][outcome] += 1
                 observed = number(r["observed_g"])
                 if outcome == "matched" and observed is not None:
                     mass.append(abs(observed - weights[ident]))

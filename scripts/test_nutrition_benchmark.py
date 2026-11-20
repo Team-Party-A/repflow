@@ -83,13 +83,20 @@ class NutritionBenchmarkTests(unittest.TestCase):
             "observed_g": "120",
             "visible_before_inference": "yes",
         }
-        scores = benchmark.score([ref], ref_items, [raw, corrected], [item])
+        shown = dict(
+            item,
+            reference_ingredient_id="",
+            matched_or_missed_or_extra="visible_unlabelled",
+        )
+        scores = benchmark.score([ref], ref_items, [raw, corrected], [item, shown])
         result = scores["raw/all"]
         self.assertEqual(result["nutrients"]["carbs_g"]["mape_n"], 0)
         self.assertEqual(result["nutrients"]["fat_g"]["n"], 0)
         self.assertEqual(result["nutrients"]["energy_kcal"]["mae"], 10)
         self.assertEqual(result["cache_hit_rate"], 0.5)
         self.assertEqual(result["mass_mae_g"], 20)
+        self.assertEqual(result["visibility"]["yes"]["reference"], 1)
+        self.assertEqual(result["ingredients"], {"matched": 1, "visible_unlabelled": 1})
         self.assertEqual(
             scores["user_confirmed/single"]["nutrients"]["energy_kcal"]["mae"], 0
         )
