@@ -145,6 +145,8 @@ def check():
             manager.activate(recreate=True)
             original = verify()
             for path in (
+                "/api/v1/nutrition/foods",
+                "/api/v1/nutrition/analyses",
                 "/health",
                 "/docs",
                 "/docs/openapi.yaml",
@@ -157,6 +159,9 @@ def check():
             for path, status in (
                 ("/api/v1/auth/login", 405),
                 ("/api/v1/workouts", 401),
+                ("/api/v1/nutrition/foods", 401),
+                ("/api/v1/nutrition/meals/00000000-0000-4000-8000-000000000001", 401),
+                ("/api/v1/nutrition/admin", 404),
                 ("/api/v1/unknown", 404),
                 ("/docs/missing", 404),
                 ("/openapi.json", 404),
@@ -165,6 +170,22 @@ def check():
                     f"https://127.0.0.1:{https_port}{path}", status, tls_context
                 )
             docs_url = f"https://127.0.0.1:{https_port}"
+            for size, expected in ((2 * 1024 * 1024, 401), (4 * 1024 * 1024 + 1, 413)):
+                # 在发送正文前，超限由 nginx 拒绝；允许大小的请求可到达业务鉴权。
+                connection = http.client.HTTPSConnection(
+                    "127.0.0.1", https_port, context=tls_context, timeout=10
+                )
+                try:
+                    connection.putrequest("POST", "/api/v1/nutrition/analyses")
+                    connection.putheader("Content-Type", "image/jpeg")
+                    connection.putheader("Content-Length", str(size))
+                    connection.endheaders()
+                    response = connection.getresponse()
+                    assert response.status == expected, (size, response.status)
+                    if expected == 413:
+                        assert json.load(response)["error"]["code"] == "IMAGE_TOO_LARGE"
+                finally:
+                    connection.close()
             contract = source.parent / "docs/api/openapi.yaml"
             for path, media_type, marker in (
                 ("/docs", "text/html", b"/docs/init.js"),

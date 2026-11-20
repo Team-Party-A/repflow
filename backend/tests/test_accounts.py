@@ -296,6 +296,12 @@ def test_real_migrations_match_models_and_round_trip(account_database):
             "sessions",
             "workouts",
             "workout_sets",
+            "nutrition_foods",
+            "nutrition_food_versions",
+            "nutrition_submissions",
+            "nutrition_meals",
+            "nutrition_meal_items",
+            "nutrition_analyses",
             "alembic_version",
         }
         assert (
@@ -312,6 +318,12 @@ def test_real_migrations_match_models_and_round_trip(account_database):
             "sessions",
             "workouts",
             "workout_sets",
+            "nutrition_foods",
+            "nutrition_food_versions",
+            "nutrition_submissions",
+            "nutrition_meals",
+            "nutrition_meal_items",
+            "nutrition_analyses",
             "alembic_version",
         }
 
