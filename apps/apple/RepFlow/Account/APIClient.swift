@@ -46,16 +46,20 @@ struct APIClient {
     /// 发一个请求，2xx 返回正文，其余按契约错误体抛 `APIError`
     func send(
         _ path: String, method: String = "POST", token: String? = nil,
-        query: [URLQueryItem] = [], body: Data? = nil
+        query: [URLQueryItem] = [], body: Data? = nil,
+        contentType: String = "application/json", idempotencyKey: UUID? = nil
     ) async throws -> Data {
         var url = baseURL.appending(path: "api/v1/" + path)
         if !query.isEmpty { url.append(queryItems: query) }
         var request = URLRequest(url: url)
         request.httpMethod = method
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        if let idempotencyKey {
+            request.setValue(idempotencyKey.uuidString, forHTTPHeaderField: "Idempotency-Key")
+        }
         if let body {
             request.httpBody = body
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         }
         let data: Data
         let response: URLResponse
