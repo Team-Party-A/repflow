@@ -85,7 +85,10 @@ class ArkProvider:
             conn.close()
         try:
             reply = json.loads(raw)
-            message = reply["choices"][0]["message"]["content"].strip()
+            choice = reply["choices"][0]
+            if choice.get("finish_reason") != "stop":
+                raise ProviderFailure("invalid_result")
+            message = choice["message"]["content"].strip()
             if message.startswith("```") and message.endswith("```"):
                 message = message.split("\n", 1)[1][:-3]
             data = json.loads(message)

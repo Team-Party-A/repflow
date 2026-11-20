@@ -3,7 +3,7 @@ import binascii
 import json
 from uuid import UUID, uuid4
 
-from sqlalchemy import case, func, or_, select, text, tuple_
+from sqlalchemy import any_, case, func, or_, select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import APIError
@@ -91,7 +91,7 @@ async def find_public(db, name, preparation):
             Food.owner_id.is_(None),
             Food.merged_into.is_(None),
             Food.preparation_key == food_key(preparation),
-            or_(Food.name_key == key, Food.alias_keys.any(key)),
+            or_(Food.name_key == key, key == any_(Food.alias_keys)),
         )
         .order_by(
             (Food.source == "verified").desc(), (Food.name_key == key).desc(), Food.id
