@@ -51,17 +51,54 @@ async def test_vision_wire_uses_inline_image_and_reports_only_valid_usage(ark):
     foods, usage = await provider.recognize(b"jpeg")
     assert foods[0].name == "熟豆" and foods[0].grams is None
     assert usage == {"prompt_tokens": 21, "completion_tokens": None}
-    transport.assert_called_once_with("ark.cn-beijing.volces.com", timeout=25)
+    transport.assert_called_once_with("ark.cn-beijing.volces.com", timeout=38)
     args, kwargs = connection.request.call_args
     assert args == ("POST", "/api/v3/chat/completions")
     assert kwargs["headers"]["Authorization"] == "Bearer fixture-only"
     payload = json.loads(kwargs["body"])
     assert payload["model"] == "fixture-vision"
+    assert "thinking" not in payload
     assert (
         payload["messages"][1]["content"][0]["image_url"]["url"]
         == "data:image/jpeg;base64,anBlZw=="
     )
     connection.close.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_seed_pro_draft_omits_deep_thinking_and_prices_cached_input(
+    ark, monkeypatch
+):
+    provider, connection, _ = ark
+    provider.vision = provider.text = "doubao-seed-2-1-pro-260915"
+    connection.getresponse.return_value.read.return_value = wire_reply(
+        '{"items": []}',
+        usage={
+            "prompt_tokens": 100,
+            "completion_tokens": 10,
+            "prompt_tokens_details": {"cached_tokens": 40},
+        },
+    )
+    _, vision_usage = await provider.recognize(b"jpeg")
+    _, text_usage = await provider.profiles([("米饭", "熟")])
+    assert all(
+        json.loads(call.kwargs["body"])["thinking"] == {"type": "disabled"}
+        for call in connection.request.call_args_list
+    )
+    metrics = {
+        "vision_calls": 1,
+        "vision_usage": vision_usage,
+        "text_calls": 1,
+        "text_usage": text_usage,
+    }
+    for phase in ("VISION", "TEXT"):
+        monkeypatch.setenv(f"ARK_{phase}_INPUT_CNY_PER_MTOK", "6")
+        monkeypatch.setenv(f"ARK_{phase}_OUTPUT_CNY_PER_MTOK", "30")
+        monkeypatch.delenv(f"ARK_{phase}_CACHED_INPUT_CNY_PER_MTOK", raising=False)
+    assert account_cost(metrics)["cost_cny"] is None
+    for phase in ("VISION", "TEXT"):
+        monkeypatch.setenv(f"ARK_{phase}_CACHED_INPUT_CNY_PER_MTOK", "1.2")
+    assert account_cost(metrics)["cost_cny"] == "0.001416"
 
 
 @pytest.mark.asyncio
