@@ -10,8 +10,8 @@
 
 ```sh
 set -eu
-docker build --target test -t repflow-tests:local backend
-docker build --target runtime -t repflow-api:local backend
+docker build --build-context api_contract=docs/api --target test -t repflow-tests:local backend
+docker build --build-context api_contract=docs/api --target runtime -t repflow-api:local backend
 API_IMAGE=repflow-api:local TEST_IMAGE=repflow-tests:local sh deploy/check.sh
 python3 -m unittest discover -s deploy -p 'test_*.py' -v
 ```
@@ -258,3 +258,12 @@ systemctl --user list-timers repflow-cert-renew.timer
 - 私有 `metrics-<run>-<attempt>.json` 记录发现、下载、候选、登记或回退时间，以及下载前后的网络 RX/TX 增量。`docker_netns` 为 Docker 网络空间默认出口统计，`host` 为宿主回退，两者都包含背景流量与协议开销，不能称精确 GHCR 流量。另取等长空闲窗口作基线，缺失 blob 压缩量与线路实测值分列。
 - 验收覆盖完整缓存但不同于现网的目标、只改业务代码、真实新依赖层。记录 CI 缓存导入导出字节与耗时、层摘要、API 次数及响应体字节，并分解构建发布、发现、下载、候选确认和整体耗时。热缓存至少测三轮。真实发布按合入到 Confirm 计时，重跑按本次启动计时。保留现网及回退缓存，使用独立 CI scope 建立冷构建基线。
 - 下载仍有 240 秒边界，新的提速结果以实测确认。若新层仍超时，另行评审下载预算及其外层时限，既有完整缓存和轮询优化不会提高冷层网络吞吐率。
+
+
+## 9. 在线 API 文档（#107）
+
+助教和组员可在已部署的 HTTPS 入口打开 `/docs` 查看只读文档，无需登录。`/docs/openapi.yaml` 提供仓库中的 [OpenAPI 1.0.0](api/openapi.yaml) 原文。Swagger UI 5.35.0 的资源随镜像发布，页面关闭试调用。账号和训练接口继续按现有契约鉴权。
+
+镜像构建使用 `--build-context api_contract=docs/api`，直接复制契约原文。更新 Swagger UI 时需同时更新版本、发布包校验和并复测页面。每次涉及契约的发布都执行构建和 HTTPS 检查，核对线上文档可下载且与对应提交逐字节一致。
+
+合入后由负责人在浏览器访问 `/docs`，展开账号和训练接口、确认文档版本和样例，下载 `/docs/openapi.yaml` 与发布提交的原文比对。验收通过后，在 #98 留下入口路径供打包。

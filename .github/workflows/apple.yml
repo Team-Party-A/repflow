@@ -69,10 +69,10 @@ jobs:
             -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17,OS=27.0' \
             -destination-timeout 120 -derivedDataPath "$RUNNER_TEMP/repflow-derived-data" \
             -resultBundlePath "$RUNNER_TEMP/RepFlow-iOS.xcresult" CODE_SIGNING_ALLOWED=NO
-      - name: Run watchOS XCTest on watchOS 27.0
+      - name: Run watchOS XCTest on watchOS 27.2
         run: |
           xcodebuild test -project RepFlow.xcodeproj -scheme RepFlowWatch \
-            -configuration Debug -destination 'platform=watchOS Simulator,name=Apple Watch SE 3 (40mm),OS=27.0' \
+            -configuration Debug -destination 'platform=watchOS Simulator,name=Apple Watch SE 3 (40mm),OS=27.2' \
             -destination-timeout 120 -derivedDataPath "$RUNNER_TEMP/repflow-derived-data" \
             -resultBundlePath "$RUNNER_TEMP/RepFlow-watchOS.xcresult" CODE_SIGNING_ALLOWED=NO
       - name: Summarize successful checks
@@ -80,7 +80,7 @@ jobs:
           {
             printf '### Apple CI\n\n'
             printf 'Commit: %s\n\n' "$GITHUB_SHA"
-            printf 'Xcode 27.1 (27A9275); iPhone 17 / iOS 27.0; Apple Watch SE 3 (40mm) / watchOS 27.0.\n\n'
+            printf 'Xcode 27.1 (27A9275); iPhone 17 / iOS 27.0; Apple Watch SE 3 (40mm) / watchOS 27.2.\n\n'
             printf 'Passed: strict formatting, iOS app with embedded Watch app build, and both XCTest schemes.\n\n'
             printf 'Minimum-version physical-device validation remains separate.\n'
           } >> "$GITHUB_STEP_SUMMARY"

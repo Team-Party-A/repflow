@@ -17,7 +17,7 @@
 - PR 合入后源分支自动删除。
 - 任何人都不直接向 `main` 或 `dev` 推送。
 
-每个 PR 和合入队列都返回 `Apple CI gate`、`Backend CI gate` 和 `gitleaks`。Apple 完整检查覆盖 `apps/apple/`，Backend 完整检查覆盖 `backend/` 和 `deploy/`。修改相应工作流或共用路径判断脚本也会触发对应检查。纯文档改动的两个门禁会说明为何跳过完整检查，路径判断或测试失败时门禁失败。
+每个 PR 和合入队列都返回 `Apple CI gate`、`Backend CI gate` 和 `gitleaks`。Apple 完整检查覆盖 `apps/apple/`，Backend 完整检查覆盖 `backend/`、`deploy/` 和作为在线文档构建输入的 `docs/api/openapi.yaml`。修改相应工作流或共用路径判断脚本也会触发对应检查。纯文档改动的两个门禁会说明为何跳过完整检查，路径判断或测试失败时门禁失败。
 
 组长先用纯文档 PR 和代码 PR 确认 GitHub Actions 上报的门禁名称，再用单独针对 `dev` 的 ruleset 加入两个必需检查并启用 squash 合入队列。用进入队列后的运行确认三项检查都返回结果。`main` 在发布分支带齐工作流后按同样步骤配置。紧急通道仍按团队章程执行。
 

@@ -210,7 +210,9 @@ async def test_health_queries_real_postgres_and_keeps_business_schema_empty(prew
 
 
 @pytest.mark.asyncio
-async def test_only_operational_health_route_is_available(health_client):
+async def test_unversioned_business_and_generated_schema_routes_are_closed(
+    health_client,
+):
     _, client = health_client
-    for path in ("/docs", "/openapi.json", "/register", "/workouts"):
+    for path in ("/openapi.json", "/register", "/workouts"):
         assert (await client.get(path)).status_code == 404

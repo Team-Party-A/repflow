@@ -14,6 +14,7 @@ from sqlalchemy.pool import PoolProxiedConnection
 from app.auth import initialize_auth
 from app.auth import router as auth_router
 from app.errors import install_error_handlers
+from app.online_docs import router as online_docs_router
 from app.settings import DatabaseSettings
 from app.workout_queries import router as workout_queries_router
 from app.workouts import router as workouts_router
@@ -70,6 +71,7 @@ def create_app(settings: DatabaseSettings | None = None) -> FastAPI:
     application.include_router(auth_router)
     application.include_router(workouts_router)
     application.include_router(workout_queries_router)
+    application.include_router(online_docs_router)
     install_error_handlers(application)
 
     @application.get("/health")
