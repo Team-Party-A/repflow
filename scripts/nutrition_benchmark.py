@@ -119,17 +119,20 @@ def capture(args, samples, meals):
             continue
         if stage == "user_confirmed" and sample not in meal_ids:
             continue
-        start = time.monotonic()
+        accepted_at = None
+        receipt_path = args.output / (sample + "-" + stage + ".json")
         try:
             if stage == "raw":
                 photo = reference_photo(by_sample[sample])
-                start = time.monotonic()
                 job = api(
                     base, "nutrition/analyses", token=token, body=photo, key=uuid4()
                 )
                 del photo
+                accepted_at = time.monotonic()
+                receipt = {"analysis_id": str(UUID(job["id"]))}
+                receipt_path.write_text(json.dumps(receipt))
                 while job["status"] in ("queued", "processing"):
-                    if time.monotonic() - start > 115:
+                    if time.monotonic() - accepted_at > 115:
                         raise TimeoutError
                     time.sleep(2)
                     job = api(
@@ -139,7 +142,6 @@ def capture(args, samples, meals):
                     row.update(status=job["status"], failure_reason=job["failure_code"])
                     continue
                 items = job["items"]
-                row["latency_ms"] = round(1000 * (time.monotonic() - start))
                 for field in FIELDS:
                     measures = [
                         None
@@ -149,7 +151,7 @@ def capture(args, samples, meals):
                         for item in items
                     ]
                     row[field] = "" if None in measures else sum(measures)
-                receipt = {"analysis_id": job["id"], "items": items}
+                receipt["items"] = items
             else:
                 meal = api(
                     base, "nutrition/meals/" + str(UUID(meal_ids[sample])), token=token
@@ -162,9 +164,7 @@ def capture(args, samples, meals):
                     )
                 receipt = {"items": meal["items"]}
             row["status"] = "ok"
-            (args.output / (sample + "-" + stage + ".json")).write_text(
-                json.dumps(receipt, ensure_ascii=False, indent=2)
-            )
+            receipt_path.write_text(json.dumps(receipt, ensure_ascii=False, indent=2))
         except (
             OSError,
             HTTPError,
@@ -180,6 +180,8 @@ def capture(args, samples, meals):
                 else type(error).__name__
             )
         finally:
+            if accepted_at is not None:
+                row["latency_ms"] = round(1000 * (time.monotonic() - accepted_at))
             row["run_id"] = args.output.name
             write(args.output / "observations-meals.csv", meals)
 
@@ -210,7 +212,7 @@ def attach_metrics(directory, source):
                 row[f"{model}_{direction}_tokens"] = values.get(
                     model + "_usage", {}
                 ).get(key, "")
-        row["cost"] = values.get("cost_cny") or ""
+        row["cost"] = values.get("cost_cny")
         row["currency"], row["rate_reference"] = (
             "CNY",
             json.dumps(values.get("rates_cny_per_million", {})),
@@ -247,6 +249,16 @@ def score(reference, ref_items, meals, items):
             states = Counter()
             for r in observations:
                 states[r["status"] or "unmeasured"] += 1
+                if number(r["latency_ms"]) is not None:
+                    elapsed.append(number(r["latency_ms"]))
+                if r["currency"] == "CNY" and number(r["cost"]) is not None:
+                    costs.append(number(r["cost"]))
+                if (
+                    number(r["cache_hits_unique"]) is not None
+                    and number(r["lookups_unique"]) is not None
+                ):
+                    hits += number(r["cache_hits_unique"])
+                    lookups += number(r["lookups_unique"])
                 if r["status"] != "ok":
                     continue
                 for field in FIELDS:
@@ -258,16 +270,6 @@ def score(reference, ref_items, meals, items):
                     totals[field].append(delta)
                     if expected > 0:
                         percentages[field].append(100 * delta / expected)
-                if number(r["latency_ms"]) is not None:
-                    elapsed.append(number(r["latency_ms"]))
-                if r["currency"] == "CNY" and number(r["cost"]) is not None:
-                    costs.append(number(r["cost"]))
-                if (
-                    number(r["cache_hits_unique"]) is not None
-                    and number(r["lookups_unique"]) is not None
-                ):
-                    hits += number(r["cache_hits_unique"])
-                    lookups += number(r["lookups_unique"])
             counts = Counter()
             mass = []
             seen = set()
