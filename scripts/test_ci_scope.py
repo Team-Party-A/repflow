@@ -42,6 +42,11 @@ class ScopeTest(unittest.TestCase):
         for module in ("apple", "backend"):
             self.assertFalse(needs_checks(module, "pull_request", event, head))
 
+    def test_nutrition_contract_triggers_backend(self):
+        self.write("docs/api/nutrition.yaml")
+        head = self.commit()
+        self.assertTrue(needs_checks("backend", "push", {"before": self.base}, head))
+
     def test_api_contract_is_a_backend_build_input(self):
         self.write("docs/api/openapi.yaml")
         head = self.commit()

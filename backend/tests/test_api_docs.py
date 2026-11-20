@@ -36,7 +36,12 @@ async def test_api_docs_has_same_origin_assets_and_disables_try_it_out(docs_clie
 @pytest.mark.asyncio
 async def test_docs_routes_accept_only_reads_and_known_paths(docs_client):
     client = docs_client
-    for path in ("/docs", "/docs/init.js", "/docs/openapi.yaml"):
+    for path in (
+        "/docs",
+        "/docs/init.js",
+        "/docs/openapi.yaml",
+        "/docs/nutrition.yaml",
+    ):
         head = await client.head(path)
         assert head.status_code == 200
         assert head.content == b""

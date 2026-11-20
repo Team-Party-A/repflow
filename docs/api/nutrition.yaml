@@ -1,0 +1,368 @@
+openapi: 3.1.0
+info:
+  title: RepFlow 饮食记录
+  version: 0.1.0
+  description: |
+    #135 评审稿。所有业务请求使用 HTTPS 和既有 Bearer 会话；账号取自会话。
+    私人食物、投稿、分析任务和餐次按账号隔离，访问他人物件返回 404；响应使用 Cache-Control: no-store。
+    来源 verified 表示维护者核对过标签或成分资料；ai_estimate 是可共享的未核实通用食物估算；private 仅本人可见。
+    个人投稿通过审核后形成独立的公共版本，个人原条目和既有餐次仍保留。审核、驳回及合并限维护者使用管理命令。
+servers:
+  - url: /api/v1/nutrition
+security:
+  - bearerAuth: []
+paths:
+  /foods:
+    get:
+      operationId: searchNutritionFoods
+      summary: 搜索公共食物和本人的私人食物
+      description: 名称和别名均可命中，生熟状态随返回值展示；可食部分、生熟状态或制法不同的条目分别列出。
+      parameters:
+        - {in: query, name: q, schema: {type: string, maxLength: 120}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 50, default: 20}}
+        - {in: query, name: cursor, schema: {type: string}, description: 同一查询的下一页游标}
+      responses:
+        '200':
+          description: 可选择的食物；未命中时 items 为空
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Food'}}
+                  next_cursor: {type: [string, 'null']}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: createPrivateFood
+      summary: 按标签或自有配方新建私人食物
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/FoodInput'}
+      responses:
+        '201': {$ref: '#/components/responses/Food'}
+        '200': {$ref: '#/components/responses/Food'}
+        default: {$ref: '#/components/responses/Error'}
+  /foods/{food_id}/submissions:
+    parameters: [{in: path, name: food_id, required: true, schema: {$ref: '#/components/schemas/ID'}}]
+    post:
+      operationId: submitPrivateFood
+      summary: 主动投稿本人的食物资料
+      description: 仅复制当前食物版本的名称、制法、别名与每百克数据；同一食物版本重复投稿返回原投稿及状态。不会复制任何餐次、餐照、私人备注或账号标识到公共库。
+      responses:
+        '201': {$ref: '#/components/responses/Submission'}
+        '200': {$ref: '#/components/responses/Submission'}
+        default: {$ref: '#/components/responses/Error'}
+  /analyses:
+    post:
+      operationId: startMealPhotoAnalysis
+      summary: 提交餐照，获取异步任务
+      description: |
+        请求体为 iPhone 重新编码并移除定位元数据的 JPEG，最大 4 MiB。先核对幂等键，再检查调用额度。
+        同账号同键同图返回原任务，不重复计费；同键异图返回 409。新任务排队后返回，客户端按 Retry-After 轮询。
+        图片仅在本次任务临时处理，完成、失败或过期后清理。任务本身不会保存餐次。
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema: {type: string, format: binary}
+      responses:
+        '202':
+          description: 已接收或复用原任务；通过返回的 id 查询
+          headers:
+            Retry-After: {$ref: '#/components/headers/RetryAfter'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Analysis'}
+        '413': {$ref: '#/components/responses/Error'}
+        '415': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Quota'}
+        default: {$ref: '#/components/responses/Error'}
+  /analyses/{analysis_id}:
+    parameters: [{in: path, name: analysis_id, required: true, schema: {$ref: '#/components/schemas/ID'}}]
+    get:
+      operationId: getMealPhotoAnalysis
+      summary: 读取本人任务的状态或草稿
+      description: 视觉先列出食材和可食份量，再按通用名称、别名及生熟制法查库，优先 verified，再用 ai_estimate。未命中项合并请求一次文字模型。来源或份量不明时标记待确认。
+      responses:
+        '200':
+          description: ready 返回草稿；failed 或 expired 可以转手动记餐
+          headers:
+            Retry-After: {$ref: '#/components/headers/RetryAfter'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Analysis'}
+        default: {$ref: '#/components/responses/Error'}
+  /meals:
+    get:
+      operationId: listMealsForLocalDay
+      summary: 查看某个当地自然日内的本人餐次及四项合计
+      description: 使用 IANA 时区换算从当地零点到次日零点的左闭右开区间，按进餐时间、餐次 ID 排序。空日四项均为 0；有待补项时，对应营养素合计为 null。
+      parameters:
+        - {in: query, name: date, required: true, schema: {type: string, format: date}}
+        - {in: query, name: timezone, required: true, schema: {type: string}, example: Asia/Shanghai}
+      responses:
+        '200':
+          description: 餐次及当地日合计
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [date, timezone, meals, totals]
+                properties:
+                  date: {type: string, format: date}
+                  timezone: {type: string}
+                  meals: {type: array, items: {$ref: '#/components/schemas/Meal'}}
+                  totals: {$ref: '#/components/schemas/Nutrients'}
+        default: {$ref: '#/components/responses/Error'}
+  /meals/{meal_id}:
+    parameters: [{in: path, name: meal_id, required: true, schema: {$ref: '#/components/schemas/ID'}}]
+    get:
+      operationId: getNutritionMeal
+      summary: 查看自己的已保存餐次及营养快照
+      responses:
+        '200': {$ref: '#/components/responses/Meal'}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      operationId: saveNutritionMeal
+      summary: 整餐确认后保存或替换餐次
+      description: |
+        客户端生成稳定 meal_id。创建使用 revision 1，修改使用当前版本加一。同版本同内容重试成功，同版本不同内容或跳号返回 409。
+        服务端按用户有权使用的 food_id 和 food_version 读取快照并计算营养，禁止客户端声明数据已核实。
+        编辑已保存餐次时，未更换的食物沿用原快照；核实、合并或发布新版本均不改写历史。
+        一道混合菜按整菜或按组成项计一次。只有确认页列出的条目会保存。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MealInput'}
+      responses:
+        '201': {$ref: '#/components/responses/Meal'}
+        '200': {$ref: '#/components/responses/Meal'}
+        '409': {$ref: '#/components/responses/Error'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: deleteNutritionMeal
+      summary: 删除自己的餐次并更新当日合计
+      description: revision 为当前版本加一，重放同一删除返回 204。删除后的过期 PUT 返回 409，不能恢复已删除记录。
+      parameters:
+        - {in: query, name: revision, required: true, schema: {$ref: '#/components/schemas/Revision'}}
+      responses:
+        '204': {description: 已删除}
+        default: {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, description: 沿用既有 RepFlow 账号会话}
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: 同一账号的同一操作重试时使用同一 UUID；同键而输入不同返回 409。
+      schema: {$ref: '#/components/schemas/ID'}
+  headers:
+    RetryAfter:
+      description: 建议再次查询或尝试前等待的秒数
+      schema: {type: integer, minimum: 1}
+  responses:
+    Food:
+      description: 已保存或复用的本人食物
+      content: {application/json: {schema: {$ref: '#/components/schemas/Food'}}}
+    Submission:
+      description: 对应此食物版本的投稿
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [id, status]
+            properties:
+              id: {$ref: '#/components/schemas/ID'}
+              status: {type: string, enum: [pending, verified, rejected, merged]}
+    Meal:
+      description: 已保存的餐次及服务端重新计算的合计
+      content: {application/json: {schema: {$ref: '#/components/schemas/Meal'}}}
+    Quota:
+      description: 当前额度已用完，手动录入可用
+      headers: {Retry-After: {$ref: '#/components/headers/RetryAfter'}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Error:
+      description: 无效请求 400、未登录 401、不可访问 404、冲突 409、图片过大 413、格式错误 415、字段错误 422、额度 429 或服务故障 5xx
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+  schemas:
+    ID: {type: string, format: uuid}
+    Revision: {type: integer, minimum: 1}
+    Name: {type: string, minLength: 1, maxLength: 120}
+    Grams:
+      type: [number, 'null']
+      exclusiveMinimum: 0
+      description: 可食重量，单位 g；null 显示待补。
+    Value: {type: [number, 'null'], minimum: 0}
+    Nutrients:
+      type: object
+      additionalProperties: false
+      required: [carbs_g, protein_g, fat_g, energy_kcal]
+      description: null 表示待补，实际为零时返回 0。每百克、单项及合计使用相同单位。
+      properties:
+        carbs_g: {$ref: '#/components/schemas/Value'}
+        protein_g: {$ref: '#/components/schemas/Value'}
+        fat_g: {$ref: '#/components/schemas/Value'}
+        energy_kcal: {$ref: '#/components/schemas/Value'}
+    Per100:
+      allOf:
+        - {$ref: '#/components/schemas/Nutrients'}
+        - type: object
+          properties:
+            carbs_g: {maximum: 100}
+            protein_g: {maximum: 100}
+            fat_g: {maximum: 100}
+      description: 每 100 g 可食部分；能量沿用同一来源的 kcal 数值。
+    FoodInput:
+      type: object
+      additionalProperties: false
+      required: [name, preparation, per_100g]
+      properties:
+        name: {$ref: '#/components/schemas/Name'}
+        preparation: {$ref: '#/components/schemas/Name', description: 例如熟、干、生、油炸或未注明}
+        aliases: {type: array, uniqueItems: true, items: {$ref: '#/components/schemas/Name'}}
+        per_100g: {$ref: '#/components/schemas/Per100'}
+    Food:
+      type: object
+      required: [id, version, name, preparation, aliases, source, source_reference, per_100g]
+      properties:
+        id: {$ref: '#/components/schemas/ID'}
+        version: {$ref: '#/components/schemas/Revision'}
+        name: {$ref: '#/components/schemas/Name'}
+        preparation: {$ref: '#/components/schemas/Name'}
+        aliases: {type: array, items: {$ref: '#/components/schemas/Name'}}
+        source: {enum: [private, ai_estimate, verified]}
+        source_reference: {type: [string, 'null'], description: 已核实条目的标签或成分资料及版本}
+        per_100g: {$ref: '#/components/schemas/Per100'}
+      if: {properties: {source: {const: verified}}}
+      then: {properties: {source_reference: {type: string, minLength: 1}}}
+    FoodRef:
+      type: object
+      additionalProperties: false
+      required: [id, version]
+      properties:
+        id: {$ref: '#/components/schemas/ID'}
+        version: {$ref: '#/components/schemas/Revision'}
+    Provenance:
+      type: object
+      required: [reference, name, preparation, source, source_reference, per_100g]
+      description: 匹配时由服务端填入，未匹配显示待补；已存餐次使用当时的快照。
+      properties:
+        reference: {oneOf: [{$ref: '#/components/schemas/FoodRef'}, {type: 'null'}]}
+        name: {$ref: '#/components/schemas/Name'}
+        preparation: {$ref: '#/components/schemas/Name'}
+        source: {enum: [private, ai_estimate, verified, unmatched]}
+        source_reference: {type: [string, 'null']}
+        per_100g: {$ref: '#/components/schemas/Per100'}
+      if: {properties: {source: {const: unmatched}}}
+      then:
+        properties:
+          reference: {type: 'null'}
+          source_reference: {type: 'null'}
+          per_100g: {properties: {carbs_g: {type: 'null'}, protein_g: {type: 'null'}, fat_g: {type: 'null'}, energy_kcal: {type: 'null'}}}
+      else: {properties: {reference: {$ref: '#/components/schemas/FoodRef'}}}
+      allOf:
+        - if: {properties: {source: {const: verified}}}
+          then: {properties: {source_reference: {type: string, minLength: 1}}}
+    DraftItem:
+      type: object
+      required: [food, grams, needs_review]
+      properties:
+        food: {$ref: '#/components/schemas/Provenance'}
+        grams: {$ref: '#/components/schemas/Grams'}
+        needs_review: {type: boolean, description: 未看清、缺少份量或无法匹配时突出提示}
+    Analysis:
+      type: object
+      required: [id, status, items, failure_code]
+      properties:
+        id: {$ref: '#/components/schemas/ID'}
+        status: {enum: [queued, processing, ready, failed, expired]}
+        items: {type: array, items: {$ref: '#/components/schemas/DraftItem'}}
+        failure_code: {enum: [null, no_food, provider_unavailable, invalid_result, expired]}
+      oneOf:
+        - properties: {status: {enum: [queued, processing]}, items: {maxItems: 0}, failure_code: {type: 'null'}}
+        - properties: {status: {const: ready}, items: {minItems: 1}, failure_code: {type: 'null'}}
+        - properties: {status: {const: failed}, items: {maxItems: 0}, failure_code: {enum: [no_food, provider_unavailable, invalid_result]}}
+        - properties: {status: {const: expired}, items: {maxItems: 0}, failure_code: {const: expired}}
+      examples:
+        - {id: '00000000-0000-4000-8000-000000000002', status: queued, items: [], failure_code: null}
+    MealItemInput:
+      type: object
+      additionalProperties: false
+      required: [grams]
+      properties:
+        grams: {$ref: '#/components/schemas/Grams'}
+        food: {$ref: '#/components/schemas/FoodRef'}
+        unmatched_name: {$ref: '#/components/schemas/Name', description: 名称带生熟说明；无参考数据时仍可手动保存}
+      oneOf: [{required: [food]}, {required: [unmatched_name]}]
+    MealInput:
+      type: object
+      additionalProperties: false
+      required: [revision, eaten_at, items]
+      properties:
+        revision: {$ref: '#/components/schemas/Revision'}
+        eaten_at: {type: string, format: date-time, description: RFC 3339，含时区偏移}
+        items: {type: array, minItems: 1, items: {$ref: '#/components/schemas/MealItemInput'}}
+      example:
+        revision: 1
+        eaten_at: '2026-11-21T12:00:00+08:00'
+        items: [{food: {id: '00000000-0000-4000-8000-000000000001', version: 1}, grams: 120}]
+    SavedItem:
+      type: object
+      required: [food, grams, nutrients]
+      properties:
+        food: {$ref: '#/components/schemas/Provenance'}
+        grams: {$ref: '#/components/schemas/Grams'}
+        nutrients: {$ref: '#/components/schemas/Nutrients'}
+    Meal:
+      type: object
+      required: [id, revision, eaten_at, items, totals]
+      description: 逐项乘以可食克数 / 100，逐营养素求和，最后显示时取舍。任一项缺少该值则该项合计为 null；其余可知营养素照常汇总。
+      properties:
+        id: {$ref: '#/components/schemas/ID'}
+        revision: {$ref: '#/components/schemas/Revision'}
+        eaten_at: {type: string, format: date-time}
+        items: {type: array, minItems: 1, items: {$ref: '#/components/schemas/SavedItem'}}
+        totals: {$ref: '#/components/schemas/Nutrients'}
+      example:
+        id: '00000000-0000-4000-8000-000000000003'
+        revision: 1
+        eaten_at: '2026-11-21T12:00:00+08:00'
+        items:
+          - grams: 120
+            food:
+              reference: {id: '00000000-0000-4000-8000-000000000001', version: 1}
+              name: 示例食物
+              preparation: 熟
+              source: private
+              source_reference: null
+              per_100g: {carbs_g: 25, protein_g: 3, fat_g: 1, energy_kcal: 121}
+            nutrients: {carbs_g: 30, protein_g: 3.6, fat_g: 1.2, energy_kcal: 145.2}
+        totals: {carbs_g: 30, protein_g: 3.6, fat_g: 1.2, energy_kcal: 145.2}
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, fields]
+          properties:
+            code: {type: string}
+            message: {type: string, description: 可读说明，省略凭据和请求原文}
+            current_revision: {$ref: '#/components/schemas/Revision'}
+            fields:
+              type: array
+              items:
+                type: object
+                required: [path, message]
+                properties:
+                  path: {type: string}
+                  message: {type: string}
+      example: {error: {code: AUTH_REQUIRED, message: 请先登录, fields: []}}

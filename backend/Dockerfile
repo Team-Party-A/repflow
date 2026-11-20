@@ -21,7 +21,7 @@ COPY --from=uv /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --locked --no-dev
 COPY app ./app
-COPY --from=api_contract /openapi.yaml ./app/api_docs/openapi.yaml
+COPY --from=api_contract /openapi.yaml /nutrition.yaml ./app/api_docs/
 COPY --from=swagger_assets /docs-assets/swagger-ui-bundle.js /docs-assets/swagger-ui.css /docs-assets/licenses.txt ./app/api_docs/
 COPY alembic.ini ./
 COPY migrations ./migrations
