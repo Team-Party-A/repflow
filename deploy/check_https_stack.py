@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
+import nutrition_check
 from https_probe import STATUS_PATH, TLSCheckError, probe
 from release_probe import status_of, status_path
 from test_https_probe import create_test_certificates
@@ -170,6 +171,11 @@ def check():
                     f"https://127.0.0.1:{https_port}{path}", status, tls_context
                 )
             docs_url = f"https://127.0.0.1:{https_port}"
+            backup_digest = nutrition_check.check(command, docs_url, tls_context)
+            logger.info(
+                "Nutrition HTTPS flow and pre-upgrade archive restore passed: sha256=%s",
+                backup_digest,
+            )
             for size, expected in ((2 * 1024 * 1024, 401), (4 * 1024 * 1024 + 1, 413)):
                 # 在发送正文前，超限由 nginx 拒绝；允许大小的请求可到达业务鉴权。
                 connection = http.client.HTTPSConnection(
