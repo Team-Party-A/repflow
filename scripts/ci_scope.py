@@ -38,7 +38,7 @@ def needs_checks(module, event, payload, head):
     return any(
         path in SHARED
         or path == workflow
-        or (module == "backend" and path == b"docs/api/openapi.yaml")
+        or (module == "backend" and path in {b"docs/api/openapi.yaml", b"docs/api/nutrition.yaml"})
         or path.startswith(prefixes)
         for path in paths.split(b"\0")
     )

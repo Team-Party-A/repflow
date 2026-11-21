@@ -165,13 +165,14 @@ def check():
                     f"https://127.0.0.1:{https_port}{path}", status, tls_context
                 )
             docs_url = f"https://127.0.0.1:{https_port}"
-            contract = source.parent / "docs/api/openapi.yaml"
+            contracts = source.parent / "docs/api"
             for path, media_type, marker in (
                 ("/docs", "text/html", b"/docs/init.js"),
                 ("/docs/init.js", "text/javascript", b"supportedSubmitMethods: []"),
                 ("/docs/swagger-ui-bundle.js", "text/javascript", b"SwaggerUIBundle"),
                 ("/docs/swagger-ui.css", "text/css", b".swagger-ui"),
                 ("/docs/openapi.yaml", "application/yaml", None),
+                ("/docs/nutrition.yaml", "application/yaml", None),
                 ("/docs/licenses.txt", "text/plain", b"Apache License"),
             ):
                 with urlopen(
@@ -181,7 +182,7 @@ def check():
                     assert response.headers.get_content_type() == media_type, path
                     body = response.read()
                     if marker is None:
-                        assert body == contract.read_bytes(), path
+                        assert body == (contracts / Path(path).name).read_bytes(), path
                     else:
                         assert marker in body, path
             identity = {

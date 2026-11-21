@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 
 router = APIRouter(include_in_schema=False)
 DOCS = Path(__file__).with_name("api_docs")
-REPO_CONTRACT = Path(__file__).resolve().parents[2] / "docs/api/openapi.yaml"
+REPO_CONTRACTS = Path(__file__).resolve().parents[2] / "docs/api"
 
 
 @router.api_route("/docs", methods=["GET", "HEAD"])
@@ -28,6 +28,7 @@ async def documentation() -> FileResponse:
 async def docs_asset(name: str) -> FileResponse:
     types = {
         "openapi.yaml": "application/yaml",
+        "nutrition.yaml": "application/yaml",
         "init.js": "text/javascript",
         "swagger-ui-bundle.js": "text/javascript",
         "swagger-ui.css": "text/css",
@@ -37,9 +38,9 @@ async def docs_asset(name: str) -> FileResponse:
     if media_type is None:
         raise HTTPException(404)
     file = DOCS / name
-    if name == "openapi.yaml" and REPO_CONTRACT.is_file():
+    if media_type == "application/yaml" and (REPO_CONTRACTS / name).is_file():
         # 在源码运行时直接使用原文件，镜像使用构建时复制的同一份契约。
-        file = REPO_CONTRACT
+        file = REPO_CONTRACTS / name
     return FileResponse(
         file, media_type=media_type, headers={"X-Content-Type-Options": "nosniff"}
     )
