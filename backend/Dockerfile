@@ -28,6 +28,7 @@ COPY migrations ./migrations
 
 FROM base AS test
 RUN uv sync --locked
+COPY scripts ./scripts
 COPY tests ./tests
 CMD ["uv", "run", "--locked", "pytest", "--cov=app", "--cov-report=term-missing"]
 
