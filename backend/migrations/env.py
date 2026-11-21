@@ -1,7 +1,7 @@
 from alembic import context
 from sqlalchemy import create_engine
 
-from app.models import Base
+from app.nutrition_models import Base
 from app.settings import DatabaseSettings
 
 
