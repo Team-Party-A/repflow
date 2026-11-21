@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>NSCameraUsageDescription</key>
+    <string>拍摄本餐食物，生成可修改的食材和份量草稿。</string>
     <key>RepFlowAPIBaseURL</key>
     <string>$(REPFLOW_API_BASE_URL)</string>
 </dict>
