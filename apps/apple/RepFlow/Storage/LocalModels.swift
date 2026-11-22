@@ -186,6 +186,19 @@ final class DeletedWorkout {
     }
 }
 
+/// 收到过的手表组 ID 及所属训练，供手表补发去重。组或训练删掉后仍保留，挡住旧补发把它恢复；
+/// 不过期，退出登录也不清。不存原始消息内容
+@Model
+final class SetIDRecord {
+    @Attribute(.unique) var setID: UUID
+    var workoutID: UUID
+
+    init(setID: UUID, workoutID: UUID) {
+        self.setID = setID
+        self.workoutID = workoutID
+    }
+}
+
 /// 本机登录过的账号，见 `docs/design/数据库设计.md` 第 5 节。token 不在这里，在 Keychain。
 /// 退出不删：退出或 token 失效后，本机仍知道留下的记录属于哪个用户名，重新登录时能预填。
 @Model

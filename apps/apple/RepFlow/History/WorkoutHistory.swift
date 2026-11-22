@@ -84,15 +84,27 @@ enum HistoryFormat {
         return "\(monthDay(date, calendar: calendar)) 周\(weekdays[weekday - 1])"
     }
 
-    /// 详情页副标题：有结束时间给完整时间段，否则只有开始时间
+    /// 列表行副标题；手表训练在时间后标「手表」
+    static func rowSubtitle(of workout: Workout, calendar: Calendar = .current) -> String {
+        let source = workout.origin == .watch ? " · 手表" : ""
+        return
+            "\(time(workout.startedAt, calendar: calendar))\(source) · \(workout.exerciseIDs.count) 个动作 · \(workout.sets.count) 组"
+    }
+
+    /// 详情页副标题：有结束时间给完整时间段，否则只有开始时间；末尾标来源
     static func timeSpan(of workout: Workout, calendar: Calendar = .current) -> String {
         let start = time(workout.startedAt, calendar: calendar)
+        var span = start
         if let endedAt = workout.endedAt {
             let minutes = Int((endedAt.timeIntervalSince(workout.startedAt) / 60).rounded())
             if minutes > 0 {
-                return "\(start) – \(time(endedAt, calendar: calendar)) · \(minutes) 分钟"
+                span = "\(start) – \(time(endedAt, calendar: calendar)) · \(minutes) 分钟"
             }
         }
-        return workout.origin == .phone ? "\(start) · 手动记录" : start
+        switch workout.origin {
+        case .watch: return "\(span) · 手表记录"
+        // 手动记录有结束时间时不加后缀，与原有显示一致
+        case .phone: return span == start ? "\(start) · 手动记录" : span
+        }
     }
 }
