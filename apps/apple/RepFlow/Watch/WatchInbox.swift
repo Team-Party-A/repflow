@@ -11,6 +11,7 @@ protocol WatchMessageSender: AnyObject {
     func transfer(_ userInfo: [String: Any])
     /// 系统队列里还有没送达的同类消息
     func hasOutstanding(type: String) -> Bool
+    var outstandingDeletions: Set<UUID> { get }
 }
 
 extension RecordingTransfer: WatchMessageSender {
@@ -20,6 +21,13 @@ extension RecordingTransfer: WatchMessageSender {
 
     func transfer(_ userInfo: [String: Any]) {
         WCSession.default.transferUserInfo(userInfo)
+    }
+
+    var outstandingDeletions: Set<UUID> {
+        Set(
+            WCSession.default.outstandingUserInfoTransfers.compactMap {
+                WorkoutDeletionMessage.notification.workoutID(in: $0.userInfo)
+            })
     }
 
     func hasOutstanding(type: String) -> Bool {
@@ -36,6 +44,8 @@ final class WatchInbox: ObservableObject {
     /// 最近一条没能接收的消息给用户的说明；之后成功处理一条就清掉
     @Published private(set) var problem: String?
 
+    private var retryDeletions: DispatchWorkItem?
+    private var lastDeletionAttempt: [UUID: Date] = [:]
     private let context: ModelContext
     private let sender: any WatchMessageSender
     private let currentUserID: () -> UUID?
@@ -54,6 +64,10 @@ final class WatchInbox: ObservableObject {
 
     func receive(_ userInfo: [String: Any]) {
         let type = userInfo["type"] as? String ?? "?"
+        if type == WorkoutDeletionMessage.receipt.rawValue {
+            receiveDeletionReceipt(userInfo)
+            return
+        }
         guard let userID = currentUserID() else {
             // 未登录不写库、不 ack：副本由手表保留，登录后发 retry_pending 让它补发
             logger.info("watch message ignored while logged out: type=\(type)")
@@ -86,8 +100,70 @@ final class WatchInbox: ObservableObject {
         }
     }
 
+    /// 手机已受理的删除与当前账号和后端上传独立。系统送达后仍保留任务，直到手表回执。
+    func sendPendingDeletions() {
+        retryDeletions?.cancel()
+        guard sender.isActivated else { return }
+        do {
+            // 旧标记没有来源字段，但收到过的手表组 ID 在删除后始终保留。
+            let legacy = try context.fetch(
+                FetchDescriptor<DeletedWorkout>(
+                    predicate: #Predicate { $0.pendingWatchDeletion == nil }))
+            for marker in legacy {
+                let id = marker.workoutID
+                let groups = FetchDescriptor<SetIDRecord>(
+                    predicate: #Predicate { $0.workoutID == id })
+                marker.pendingWatchDeletion = try context.fetchCount(groups) > 0
+            }
+            if !legacy.isEmpty { try context.save() }
+            let pending = try context.fetch(
+                FetchDescriptor<DeletedWorkout>(
+                    predicate: #Predicate { $0.pendingWatchDeletion == true }))
+            let ids = Set(pending.map(\.workoutID))
+            lastDeletionAttempt = lastDeletionAttempt.filter { ids.contains($0.key) }
+            guard !ids.isEmpty else { return }
+            let outstanding = sender.outstandingDeletions
+            let now = Date()
+            for id in ids.subtracting(outstanding) {
+                if let last = lastDeletionAttempt[id], now.timeIntervalSince(last) < 60 { continue }
+                sender.transfer(WorkoutDeletionMessage.notification.envelope(for: id))
+                lastDeletionAttempt[id] = now
+            }
+        } catch {
+            context.rollback()
+            logger.error("read pending watch deletions failed: \(error)")
+        }
+        let retry = DispatchWorkItem { [weak self] in self?.sendPendingDeletions() }
+        retryDeletions = retry
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60, execute: retry)
+    }
+
+    private func receiveDeletionReceipt(_ info: [String: Any]) {
+        guard let id = WorkoutDeletionMessage.receipt.workoutID(in: info) else {
+            problem = "手表删除回执格式或版本无效，请检查两端版本。"
+            return
+        }
+        do {
+            guard
+                let marker = try first(
+                    FetchDescriptor<DeletedWorkout>(
+                        predicate: #Predicate { $0.workoutID == id })),
+                marker.pendingWatchDeletion == true
+            else { return }
+            marker.pendingWatchDeletion = false
+            try context.save()
+            lastDeletionAttempt.removeValue(forKey: id)
+            problem = nil
+        } catch {
+            context.rollback()
+            logger.error("save watch deletion receipt failed: \(id), \(error)")
+            problem = "手表删除回执保存失败，稍后会重试。"
+        }
+    }
+
     /// 登录成功，或 session 激活时已登录：请手表检查发件箱。系统队列里已有一条就不再排
     func requestRetry() {
+        sendPendingDeletions()
         guard currentUserID() != nil, sender.isActivated,
             !sender.hasOutstanding(type: "retry_pending")
         else { return }

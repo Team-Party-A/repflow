@@ -65,6 +65,15 @@ final class TrainingOutbox {
 
     func receive(_ userInfo: [String: Any]) {
         do {
+            if userInfo["type"] as? String == WorkoutDeletionMessage.notification.rawValue {
+                guard let id = WorkoutDeletionMessage.notification.workoutID(in: userInfo) else {
+                    throw MessageError.invalid
+                }
+                if training.applyDeletion(id), transport.inFlight() != nil {
+                    transport.send(WorkoutDeletionMessage.receipt.envelope(for: id))
+                }
+                return
+            }
             switch try PhoneSignal(userInfo) {
             case .ack(let workout, let set):
                 training.updateDelivery(workoutID: workout, setID: set, to: .delivered)

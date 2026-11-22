@@ -34,6 +34,8 @@ struct ManualTrainingSnapshot: Codable {
     var version = 1
     var workouts: [ManualWorkout] = []
     var currentID: UUID?
+    /// 只保留已执行删除的 ID。另一块配对手表不能替原表确认一个未知 ID。
+    var deletedWorkoutIDs: Set<UUID>?
 }
 
 final class ManualTraining: ObservableObject {
@@ -206,6 +208,18 @@ final class ManualTraining: ObservableObject {
         persist(next)
     }
 
+    func applyDeletion(_ id: UUID) -> Bool {
+        guard storageReady else { return false }
+        if snapshot.deletedWorkoutIDs?.contains(id) == true { return true }
+        guard let index = snapshot.workouts.firstIndex(where: { $0.id == id }) else { return false }
+        var next = snapshot
+        next.workouts.remove(at: index)
+        if next.currentID == id { next.currentID = nil }
+        if next.deletedWorkoutIDs == nil { next.deletedWorkoutIDs = [] }
+        next.deletedWorkoutIDs?.insert(id)
+        return persist(next)
+    }
+
     func updateDelivery(workoutID: UUID, setID: UUID?, to status: TrainingMessage.Delivery) {
         var next = snapshot
         guard let w = next.workouts.firstIndex(where: { $0.id == workoutID }) else { return }
@@ -237,15 +251,18 @@ final class ManualTraining: ObservableObject {
         persist(next)
     }
 
-    private func persist(_ next: ManualTrainingSnapshot) {
-        guard storageReady else { return }
+    @discardableResult
+    private func persist(_ next: ManualTrainingSnapshot) -> Bool {
+        guard storageReady else { return false }
         do {
             try write(JSONEncoder().encode(next), fileURL)
             snapshot = next
             errorMessage = ""
             outboxChanged?()
+            return true
         } catch {
             errorMessage = "保存失败，当前内容已保留。请重试刚才的操作：\(error.localizedDescription)"
+            return false
         }
     }
 

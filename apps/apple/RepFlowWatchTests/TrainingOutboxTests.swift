@@ -32,6 +32,67 @@ final class TrainingOutboxTests: XCTestCase {
         ["type": type, "version": 1, "payload": try JSONSerialization.data(withJSONObject: fields)]
     }
 
+    func testDeletionRemovesOnlyTargetAndAcknowledgesDuplicatesAfterRestart() throws {
+        let model = try prepare()
+        let id = try XCTUnwrap(model.current?.id)
+        model.saveSet(estimatedRepCount: 9)
+        model.finishWorkout(at: start.addingTimeInterval(120))
+        model.prepareNewWorkout()
+        model.startSet(exerciseID: "dumbbell_curl")
+        model.endSet()
+        model.adjustReps(by: 1)
+        model.saveSet(estimatedRepCount: 1)
+        let pendingSet = try XCTUnwrap(model.current?.sets.first?.id)
+        model.startSet(exerciseID: "dumbbell_curl")
+        let other = try XCTUnwrap(model.current?.id)
+        var sent: [[String: Any]] = []
+        let transport = TrainingOutbox.Transport(
+            inFlight: { [pendingSet] }, send: { sent.append($0) })
+        let queue = TrainingOutbox(training: model, transport: transport)
+        var deletion = try envelope("workout_deleted", ["workout_id": workoutID])
+        deletion["version"] = 2
+        queue.receive(deletion)
+        queue.check(force: true)
+        XCTAssertEqual(model.current?.id, other)
+        XCTAssertEqual(model.phase, .active)
+        let restored = ManualTraining(fileURL: file)
+        XCTAssertEqual(restored.snapshot.workouts.map(\.id), [other])
+        XCTAssertEqual(restored.current?.readyMessages.map(\.id), [pendingSet])
+        let restarted = TrainingOutbox(training: restored, transport: transport)
+        restarted.receive(WorkoutDeletionMessage.notification.envelope(for: UUID()))
+        restarted.receive(deletion)
+        XCTAssertEqual(sent.count, 2)
+        XCTAssertEqual(
+            sent.compactMap { WorkoutDeletionMessage.receipt.workoutID(in: $0) }, [id, id])
+    }
+
+    func testDeleteCurrentOnlyAfterSuccessfulWriteAndValidMessage() throws {
+        let model = try prepare()
+        let id = try XCTUnwrap(model.current?.id)
+        let deletion = WorkoutDeletionMessage.notification.envelope(for: id)
+        let failing = ManualTraining(fileURL: file) { _, _ in throw CocoaError(.fileWriteOutOfSpace)
+        }
+        let queue = TrainingOutbox(
+            training: failing, transport: .init(inFlight: { [] }, send: { _ in XCTFail() }))
+        queue.receive(deletion)
+        XCTAssertEqual(failing.current?.id, id)
+        XCTAssertEqual(ManualTraining(fileURL: file).current?.id, id)
+        var sent: [[String: Any]] = []
+        let working = TrainingOutbox(
+            training: model, transport: .init(inFlight: { [] }, send: { sent.append($0) }))
+        for invalidVersion: Any in [true, 2.0, 1] as [Any] {
+            var invalid = deletion
+            invalid["version"] = invalidVersion
+            working.receive(invalid)
+        }
+        XCTAssertEqual(model.current?.id, id)
+        XCTAssertTrue(sent.isEmpty)
+        working.receive(deletion)
+        XCTAssertEqual(model.phase, .choose)
+        XCTAssertNil(ManualTraining(fileURL: file).current)
+        XCTAssertEqual(sent.count, 1)
+    }
+
     func testContractExampleOfflineRestartRetryAndAck() throws {
         let training = try prepare()
         training.saveSet(estimatedRepCount: 9)

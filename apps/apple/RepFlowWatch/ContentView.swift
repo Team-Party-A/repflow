@@ -84,7 +84,7 @@ struct ContentView: View {
                 NavigationLink("已保存训练（\(training.snapshot.workouts.count)）") {
                     List(training.snapshot.workouts.reversed()) { workout in
                         NavigationLink {
-                            ScrollView { WorkoutSummary(workout: workout).padding(8) }
+                            SavedWorkoutDetail(training: training, workoutID: workout.id)
                         } label: {
                             VStack(alignment: .leading) {
                                 Text(workout.startedAt, style: .date)
@@ -175,6 +175,19 @@ struct ContentView: View {
 
 private func exerciseName(_ id: String) -> String {
     ExerciseCatalog.exercise(id: id)?.displayName ?? "未知动作（\(id)），请更新 App"
+}
+
+private struct SavedWorkoutDetail: View {
+    @ObservedObject var training: ManualTraining
+    let workoutID: UUID
+
+    var body: some View {
+        if let workout = training.snapshot.workouts.first(where: { $0.id == workoutID }) {
+            ScrollView { WorkoutSummary(workout: workout).padding(8) }
+        } else {
+            Text("这次训练已在手机删除。")
+        }
+    }
 }
 
 private struct WorkoutSummary: View {
