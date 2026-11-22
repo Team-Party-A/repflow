@@ -359,9 +359,16 @@ private struct PayloadFields {
         return date
     }
 
+    /// `TimeZone(identifier:)` 还会接受 GMT+0800、PST 这类固定偏移和缩写，后端的 ZoneInfo 不认，
+    /// 回了 ack 就再也传不上去。手表发的是 `TimeZone.current.identifier`，总在系统 IANA 列表里；
+    /// UTC、Etc/UTC 是列表外的合法别名。
+    private static let ianaTimeZones = Set(TimeZone.knownTimeZoneIdentifiers).union([
+        "UTC", "Etc/UTC",
+    ])
+
     func timeZone(_ key: String) throws -> String {
         let name = try string(key)
-        guard TimeZone(identifier: name) != nil else {
+        guard Self.ianaTimeZones.contains(name) else {
             throw WatchMessageError.invalid("\(key) 不是 IANA 时区：\(name)")
         }
         return name

@@ -297,6 +297,32 @@ final class WatchInboxTests: XCTestCase {
         XCTAssertNotNil(inbox.problem)
     }
 
+    func testTimeZoneMustBeIANANameNotJustParsableByFoundation() throws {
+        for name in ["GMT+0800", "GMT+08:00", "UTC+8", "PST"] {
+            inbox.receive(setSaved { $0["time_zone"] = name })
+        }
+        XCTAssertTrue(try context.fetch(FetchDescriptor<Workout>()).isEmpty)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SetIDRecord>()).isEmpty)
+        XCTAssertTrue(try tasks().isEmpty)
+        XCTAssertTrue(sender.sent.isEmpty)
+
+        let accepted = [
+            ("UTC", "44444444-4444-4444-8444-444444444444", "55555555-5555-4555-8555-555555555555"),
+            (
+                "Etc/UTC", "66666666-6666-4666-8666-666666666666",
+                "77777777-7777-4777-8777-777777777777"
+            ),
+            ("Asia/Shanghai", workoutID, firstSetID),
+        ]
+        for (name, workout, setID) in accepted {
+            inbox.receive(setSaved(setID: setID, workout: workout) { $0["time_zone"] = name })
+        }
+        XCTAssertEqual(
+            Set(try workouts(of: userA).map(\.timeZone)), ["UTC", "Etc/UTC", "Asia/Shanghai"])
+        XCTAssertEqual(try tasks().count, 3)
+        XCTAssertEqual(acks.count, 3)
+    }
+
     func testExtraFieldsAreIgnoredAndPhoneBoundTypesAreNotProcessed() throws {
         inbox.receive(setSaved { $0["future_field"] = "x" })
         inbox.receive(envelope("ack", ["ack_type": "set_saved"]))
