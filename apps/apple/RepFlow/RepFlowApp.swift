@@ -8,6 +8,7 @@ struct RepFlowApp: App {
     private let container: ModelContainer
     @StateObject private var accounts: AccountStore
     @StateObject private var uploads: UploadQueue
+    @StateObject private var inbox: WatchInbox
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -23,8 +24,18 @@ struct RepFlowApp: App {
         self.container = container
         _accounts = StateObject(wrappedValue: accounts)
         // 和页面共用 mainContext：训练和任务的改动彼此立即可见，不会读到另一个上下文的旧缓存
-        _uploads = StateObject(
-            wrappedValue: UploadQueue(context: container.mainContext, api: api, accounts: accounts))
+        let uploads = UploadQueue(context: container.mainContext, api: api, accounts: accounts)
+        let inbox = WatchInbox(
+            context: container.mainContext, sender: RecordingTransfer.shared,
+            currentUserID: { accounts.current?.userID },
+            onStored: { userID in uploads.sync(userID: userID) })
+        // 回调都在主队列，App 初始化完成前不会进来
+        RecordingTransfer.shared.onUserInfo = { userInfo in
+            MainActor.assumeIsolated { inbox.receive(userInfo) }
+        }
+        RecordingTransfer.shared.onActivated = { MainActor.assumeIsolated { inbox.requestRetry() } }
+        _uploads = StateObject(wrappedValue: uploads)
+        _inbox = StateObject(wrappedValue: inbox)
     }
 
     var body: some Scene {
@@ -51,9 +62,13 @@ struct RepFlowApp: App {
             .tint(Palette.text)
             .environmentObject(accounts)
             .environmentObject(uploads)
-            // 登录和注册成功都会走到这里；同账号重新登录后接着发之前没传完的任务
+            .environmentObject(inbox)
+            // 登录和注册成功都会走到这里；同账号重新登录后接着发之前没传完的任务，
+            // 并请手表补发登录前没被接收的记录
             .onChange(of: accounts.current?.userID) { _, userID in
-                if let userID { uploads.sync(userID: userID) }
+                guard let userID else { return }
+                uploads.sync(userID: userID)
+                inbox.requestRetry()
             }
         }
         .modelContainer(container)

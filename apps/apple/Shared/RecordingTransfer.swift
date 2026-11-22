@@ -3,11 +3,15 @@ import Foundation
 import WatchConnectivity
 
 /// 录制文件走 transferFile；不进入训练记录的 transferUserInfo 消息或后端上传。
+/// 一个 WCSession 只能有一个 delegate，训练消息也从这里转出，解析和写库由各端自己处理。
 final class RecordingTransfer: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = RecordingTransfer()
     @Published private(set) var files: [URL] = []
     @Published private(set) var status = ""
     private let storage = RecordingFiles()
+    /// 都在主队列回调
+    var onUserInfo: (([String: Any]) -> Void)?
+    var onActivated: (() -> Void)?
 
     override init() {
         super.init()
@@ -48,7 +52,12 @@ final class RecordingTransfer: NSObject, ObservableObject, WCSessionDelegate {
     ) {
         DispatchQueue.main.async {
             if let error { self.status = "连接失败：\(error.localizedDescription)" }
+            if activationState == .activated { self.onActivated?() }
         }
+    }
+
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        DispatchQueue.main.async { self.onUserInfo?(userInfo) }
     }
 
     func session(_ session: WCSession, didReceive file: WCSessionFile) {

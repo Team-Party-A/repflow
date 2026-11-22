@@ -6,6 +6,7 @@ struct HistoryView: View {
     let userID: UUID
 
     @EnvironmentObject private var uploads: UploadQueue
+    @EnvironmentObject private var inbox: WatchInbox
     @Query private var workouts: [Workout]
 
     init(userID: UUID) {
@@ -38,6 +39,11 @@ struct HistoryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     SyncBanner(userID: userID)
+                    if let problem = inbox.problem {
+                        Label(problem, systemImage: "applewatch")
+                            .font(.footnote)
+                            .foregroundStyle(Palette.red)
+                    }
                     if workouts.isEmpty {
                         emptyState
                     }
@@ -89,11 +95,9 @@ private struct WorkoutRow: View {
                             .font(.body.weight(.semibold))
                             .foregroundStyle(Palette.text)
                             .multilineTextAlignment(.leading)
-                        Text(
-                            "\(HistoryFormat.time(workout.startedAt)) · \(workout.exerciseIDs.count) 个动作 · \(workout.sets.count) 组"
-                        )
-                        .font(.subheadline)
-                        .foregroundStyle(Palette.text2)
+                        Text(HistoryFormat.rowSubtitle(of: workout))
+                            .font(.subheadline)
+                            .foregroundStyle(Palette.text2)
                         if status == .failed {
                             Text("同步失败 · 本地记录已保留")
                                 .font(.footnote)
