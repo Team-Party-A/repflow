@@ -1,12 +1,13 @@
 import Combine
 import Foundation
 
-/// 页面骨架的本地数据；不编码为 Watch v1 自动计次消息，也不创建同步任务。
+/// 历史手动组没有训练消息，读取旧快照时保持本地记录。
 struct ManualTrainingSet: Codable, Identifiable {
     var id = UUID()
     let exerciseID: String
     let startedAt: Date
     var endedAt: Date?
+    var message: TrainingMessage?
     var reps = 0
 }
 
@@ -17,6 +18,14 @@ struct ManualWorkout: Codable, Identifiable {
     var endedAt: Date?
     var sets: [ManualTrainingSet] = []
     var candidate: ManualTrainingSet?
+
+    var endMessage: TrainingMessage?
+
+    var readyMessages: [TrainingMessage] {
+        let groups = sets.compactMap(\.message).filter { $0.delivery != .delivered }
+        if groups.isEmpty, let endMessage, endMessage.delivery != .delivered { return [endMessage] }
+        return groups
+    }
 
     var totalReps: Int { sets.reduce(0) { $0 + $1.reps } }
 }
@@ -33,6 +42,7 @@ final class ManualTraining: ObservableObject {
     @Published private(set) var snapshot = ManualTrainingSnapshot()
     @Published private(set) var errorMessage = ""
     @Published private(set) var storageReady = false
+    var outboxChanged: (() -> Void)?
     private let fileURL: URL
     private let write: (Data, URL) throws -> Void
 
@@ -87,6 +97,7 @@ final class ManualTraining: ObservableObject {
             snapshot = loaded
             storageReady = true
             errorMessage = ""
+            outboxChanged?()
         } catch {
             storageReady = false
             errorMessage = "读取手表训练记录失败，原文件已保留。请重试：\(error.localizedDescription)"
@@ -126,11 +137,26 @@ final class ManualTraining: ObservableObject {
         updateCurrent { $0.candidate?.reps += delta }
     }
 
-    func saveSet() {
-        guard phase == .review, let candidate = current?.candidate else { return }
+    func saveSet(estimatedRepCount: Int? = nil) {
+        guard phase == .review, let current, var candidate = current.candidate else { return }
         guard (1...9999).contains(candidate.reps) else {
             errorMessage = "0 次不能保存，请增加次数或放弃本组。"
             return
+        }
+        // v1 的结束清单必须包含全部组。同次训练不能混合手动组和自动组。
+        if let first = current.sets.first, (first.message == nil) != (estimatedRepCount == nil) {
+            errorMessage = "请结束本次训练，再切换记录方式。"
+            return
+        }
+        if let estimate = estimatedRepCount {
+            do {
+                guard current.sets.count < 1000 else { throw MessageError.limit }
+                candidate.message = try TrainingMessage.saved(
+                    candidate, in: current, estimate: estimate)
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
         }
         updateCurrent {
             $0.sets.append(candidate)
@@ -156,10 +182,20 @@ final class ManualTraining: ObservableObject {
             clockError()
             return
         }
-        // 放弃候选和结束训练一起写入，失败时两者都保留原状态。
+        let endMessage: TrainingMessage?
+        do {
+            endMessage =
+                current.sets.first?.message == nil
+                ? nil : try TrainingMessage.ended(current, at: date)
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+        // 结束消息和结束状态同时落盘，是否可投递由组 ack 推导。
         updateCurrent {
             $0.candidate = nil
             $0.endedAt = date
+            $0.endMessage = endMessage
         }
     }
 
@@ -169,6 +205,27 @@ final class ManualTraining: ObservableObject {
         next.currentID = nil
         persist(next)
     }
+
+    func updateDelivery(workoutID: UUID, setID: UUID?, to status: TrainingMessage.Delivery) {
+        var next = snapshot
+        guard let w = next.workouts.firstIndex(where: { $0.id == workoutID }) else { return }
+        if let setID {
+            guard let i = next.workouts[w].sets.firstIndex(where: { $0.id == setID }),
+                let message = next.workouts[w].sets[i].message,
+                message.delivery != .delivered, message.delivery != status
+            else { return }
+            next.workouts[w].sets[i].message?.delivery = status
+        } else {
+            guard let message = next.workouts[w].endMessage,
+                message.delivery != .delivered, message.delivery != status,
+                next.workouts[w].sets.allSatisfy({ $0.message?.delivery == .delivered })
+            else { return }
+            next.workouts[w].endMessage?.delivery = status
+        }
+        persist(next)
+    }
+
+    func reportInvalidMessage(_ error: Error) { errorMessage = error.localizedDescription }
 
     private func updateCurrent(_ change: (inout ManualWorkout) -> Void) {
         guard let index = snapshot.workouts.firstIndex(where: { $0.id == snapshot.currentID })
@@ -186,6 +243,7 @@ final class ManualTraining: ObservableObject {
             try write(JSONEncoder().encode(next), fileURL)
             snapshot = next
             errorMessage = ""
+            outboxChanged?()
         } catch {
             errorMessage = "保存失败，当前内容已保留。请重试刚才的操作：\(error.localizedDescription)"
         }
