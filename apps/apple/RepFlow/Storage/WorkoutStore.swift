@@ -11,7 +11,7 @@ struct WorkoutStore {
     static func makeContainer(inMemory: Bool = false) throws -> ModelContainer {
         try ModelContainer(
             for: Workout.self, WorkoutSet.self, UploadTask.self, DeletedWorkout.self,
-            Account.self,
+            SetIDRecord.self, Account.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory))
     }
 
@@ -113,6 +113,58 @@ struct WorkoutStore {
             edited.sets.removeAll { $0.setID == set.setID }
             context.delete(set)
         }
+    }
+
+    /// 手表发来的新组：SetIDRecord、组内容、新 revision 和 PUT 任务在同一次 save 里落盘。
+    /// `existing` 为 nil 时按消息里的 workout_id 新建训练，归当前 store 的账号
+    func receiveWatchSet(
+        _ set: WorkoutSet, workoutID: UUID, startedAt: Date, timeZone: String,
+        into existing: Workout?
+    ) throws {
+        try commit {
+            context.insert(SetIDRecord(setID: set.setID, workoutID: workoutID))
+            let workout: Workout
+            if let existing {
+                precondition(existing.userID == userID, "workout \(workoutID) 不属于当前账号")
+                workout = existing
+                workout.revision += 1
+                workout.uploadState = .pending
+            } else {
+                workout = Workout(
+                    workoutID: workoutID, userID: userID, startedAt: startedAt,
+                    timeZone: timeZone, origin: .watch)
+                context.insert(workout)
+            }
+            let ordered = workout.orderedSets
+            // 补发可能乱序到达：排在最后一个序号更小的手表组之后，手机手动加的组位置不动
+            let index = set.watchSetIndex ?? .max
+            let insertAt =
+                (ordered.lastIndex { ($0.watchSetIndex ?? .max) < index }).map { $0 + 1 } ?? 0
+            context.insert(set)
+            set.workout = workout
+            var arranged = ordered
+            arranged.insert(set, at: insertAt)
+            for (offset, item) in arranged.enumerated() { item.position = offset + 1 }
+            try enqueuePut(workout)
+        }
+    }
+
+    /// 训练已在手机删除后才到的组：只登记 ID，不恢复训练
+    func recordDeletedWatchSet(_ setID: UUID, workoutID: UUID) throws {
+        try commit { context.insert(SetIDRecord(setID: setID, workoutID: workoutID)) }
+    }
+
+    /// 首次结束交接：写结束时间和交接标记，推进 revision 并排 PUT
+    func receiveWatchEnd(_ workout: Workout, endedAt: Date) throws {
+        try update(workout) { edited in
+            edited.endedAt = endedAt
+            edited.endHandoffReceived = true
+        }
+    }
+
+    /// 训练已整体删除时收到结束消息：只记交接标记，之后的重复结束直接 ack
+    func recordDeletedWatchEnd(_ marker: DeletedWorkout) throws {
+        try commit { marker.endHandoffReceived = true }
     }
 
     /// 中途失败就整体回滚：context 是页面和上传队列共用的，留下半截改动会被别处的下一次
