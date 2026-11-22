@@ -4,6 +4,7 @@ struct ContentView: View {
     @ObservedObject private var training = TrainingOutbox.shared.training
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var transfer: RecordingTransfer
+    @StateObject private var sampling = CurlSampling()
     @State private var exerciseID = ""
     @State private var confirmDiscard = false
     @State private var confirmEnd = false
@@ -33,6 +34,9 @@ struct ContentView: View {
             .background(Color("ground"))
             .foregroundStyle(Color("text"))
             .navigationTitle("RepFlow")
+            .onChange(of: training.current?.candidate?.id) { _, id in
+                if sampling.setID != nil && id != sampling.setID { sampling.cancel() }
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { TrainingOutbox.shared.check(force: true) }
             }
@@ -77,8 +81,22 @@ struct ContentView: View {
             action(
                 "开始第 \((training.current?.sets.count ?? 0) + 1) 组", icon: "play.fill",
                 primary: true, enabled: ExerciseCatalog.exercise(id: exerciseID) != nil
-            ) { training.startSet(exerciseID: exerciseID) }
-            if training.current?.sets.first?.message == nil { localNotice }
+            ) {
+                guard training.current?.candidate == nil else { return }
+                let automatic = exerciseID == "dumbbell_curl"
+                training.startSet(exerciseID: exerciseID, automaticCurl: automatic)
+                if automatic, let candidate = training.current?.candidate,
+                    candidate.automaticCurl == true
+                {
+                    sampling.start(candidate.id)
+                }
+            }
+            if exerciseID == "dumbbell_curl" {
+                Label("自动计次 · 核对保存后同步到手机", systemImage: "applewatch")
+                    .font(.footnote)
+            } else if !exerciseID.isEmpty {
+                localNotice
+            }
             if training.phase == .rest { endWorkoutButton }
             if training.phase == .choose {
                 NavigationLink("已保存训练（\(training.snapshot.workouts.count)）") {
@@ -98,23 +116,30 @@ struct ContentView: View {
         case .active:
             if let candidate = training.current?.candidate {
                 Text(exerciseName(candidate.exerciseID)).font(.headline)
-                Text("第 \((training.current?.sets.count ?? 0) + 1) 组 · 手动训练").font(.footnote)
-                Text("0 次").font(.system(size: 64, weight: .heavy)).fontWidth(.compressed)
-                    .accessibilityLabel("未录入次数")
-                Text("未接入自动计次\n结束本组后手动填写次数")
-                    .font(.footnote).foregroundStyle(Color("text2"))
-                HStack {
-                    Text("已用时间")
-                    Text(candidate.startedAt, style: .timer).monospacedDigit()
-                }.font(.footnote)
-                action("结束本组", icon: "stop.fill") { training.endSet() }
+                if candidate.automaticCurl == true {
+                    curlControls(candidate)
+                } else {
+                    Text("第 \((training.current?.sets.count ?? 0) + 1) 组 · 手动训练").font(.footnote)
+                    Text("0 次").font(.system(size: 64, weight: .heavy)).fontWidth(.compressed)
+                        .accessibilityLabel("未录入次数")
+                    Text("未接入自动计次\n结束本组后手动填写次数")
+                        .font(.footnote).foregroundStyle(Color("text2"))
+                    HStack {
+                        Text("已用时间")
+                        Text(candidate.startedAt, style: .timer).monospacedDigit()
+                    }.font(.footnote)
+                    action("结束本组", icon: "stop.fill") { training.endSet() }
+                }
                 endWorkoutButton
             }
         case .review:
             if let candidate = training.current?.candidate {
                 Text(exerciseName(candidate.exerciseID)).font(.headline)
-                Label("待核对 · 手动次数", systemImage: "pencil")
-                    .font(.footnote).foregroundStyle(Color("amber"))
+                Label(
+                    candidate.frozenEstimate == nil ? "待核对 · 手动次数" : "待核对 · 自动计次",
+                    systemImage: "pencil"
+                )
+                .font(.footnote).foregroundStyle(Color("amber"))
                 Text("\(candidate.reps) 次").font(.system(size: 48, weight: .heavy))
                     .fontWidth(.compressed).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1)
                     .accessibilityLabel("最终次数 \(candidate.reps) 次")
@@ -127,8 +152,16 @@ struct ContentView: View {
                         training.adjustReps(by: 1)
                     }
                 }
-                Text(candidate.reps == 0 ? "至少填写 1 次，或放弃本组" : "未接入自动计次，无原估计值")
-                    .font(.footnote).foregroundStyle(Color("text2"))
+                if let estimate = candidate.frozenEstimate {
+                    Text("原估计 \(estimate) 次").font(.footnote)
+                    if let reason = candidate.interruption {
+                        Text(reason).foregroundStyle(Color("amber"))
+                    }
+                }
+                if candidate.reps == 0 {
+                    Text("至少填写 1 次，或放弃本组")
+                        .font(.footnote).foregroundStyle(Color("text2"))
+                }
                 action("确认并保存", icon: "checkmark", primary: true, enabled: candidate.reps > 0) {
                     training.saveSet()
                 }
@@ -141,6 +174,45 @@ struct ContentView: View {
                 WorkoutSummary(workout: workout)
                 action("开始新训练", icon: "play.fill", primary: true) { training.prepareNewWorkout() }
                 NavigationLink("传感器录制") { RecordingView(transfer: transfer) }
+            }
+        }
+    }
+
+    @ViewBuilder private func curlControls(_ candidate: ManualTrainingSet) -> some View {
+        if sampling.setID != candidate.id {
+            Text("采样会话已中断，请放弃本组后重新开始。")
+            Button("放弃本组", role: .destructive) { confirmDiscard = true }
+        } else {
+            switch sampling.phase {
+            case .idle, .preparing:
+                Text("正在准备运动采样，请先保持静止。")
+                Button("取消本组") { confirmDiscard = true }
+            case .counting:
+                Text("估计次数").font(.footnote)
+                Text("\(sampling.count) 次").font(.system(size: 62, weight: .heavy))
+                    .monospacedDigit()
+                action("结束本组", icon: "stop.fill") {
+                    sampling.stop()
+                    if case .stopped(let end) = sampling.phase {
+                        training.freezeCurl(setID: candidate.id, estimate: sampling.count, at: end)
+                    }
+                }
+            case .stopped(let end):
+                Button("重试进入核对") {
+                    training.freezeCurl(setID: candidate.id, estimate: sampling.count, at: end)
+                }
+            case .interrupted(let reason, let end):
+                Label(reason, systemImage: "exclamationmark.triangle").foregroundStyle(
+                    Color("amber"))
+                if sampling.hasSample {
+                    Text("中断前估计 \(sampling.count) 次")
+                    action("核对已记录次数", icon: "pencil") {
+                        training.freezeCurl(
+                            setID: candidate.id, estimate: sampling.count, at: end,
+                            interruption: reason)
+                    }
+                }
+                Button("放弃本组", role: .destructive) { confirmDiscard = true }
             }
         }
     }

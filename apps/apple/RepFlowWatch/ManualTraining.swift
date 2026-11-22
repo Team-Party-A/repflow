@@ -8,6 +8,9 @@ struct ManualTrainingSet: Codable, Identifiable {
     let startedAt: Date
     var endedAt: Date?
     var message: TrainingMessage?
+    var automaticCurl: Bool?
+    var frozenEstimate: Int?
+    var interruption: String?
     var reps = 0
 }
 
@@ -104,10 +107,17 @@ final class ManualTraining: ObservableObject {
         }
     }
 
-    func startSet(exerciseID: String, at date: Date = Date()) {
+    func startSet(exerciseID: String, automaticCurl: Bool? = nil, at date: Date = Date()) {
         guard storageReady, phase == .choose || phase == .rest,
             ExerciseCatalog.exercise(id: exerciseID) != nil
         else { return }
+        guard automaticCurl != true || exerciseID == "dumbbell_curl" else { return }
+        if let automaticCurl, let first = current?.sets.first,
+            (first.message != nil) != automaticCurl
+        {
+            errorMessage = "请先结束本次训练，再切换记录方式。"
+            return
+        }
         var next = snapshot
         if current == nil {
             let workout = ManualWorkout(startedAt: date, timeZone: TimeZone.current.identifier)
@@ -117,17 +127,36 @@ final class ManualTraining: ObservableObject {
         guard let index = next.workouts.firstIndex(where: { $0.id == next.currentID }) else {
             return
         }
-        next.workouts[index].candidate = ManualTrainingSet(exerciseID: exerciseID, startedAt: date)
+        next.workouts[index].candidate = ManualTrainingSet(
+            exerciseID: exerciseID, startedAt: date,
+            automaticCurl: automaticCurl == true ? true : nil)
         persist(next)
     }
 
     func endSet(at date: Date = Date()) {
-        guard phase == .active, let candidate = current?.candidate else { return }
+        guard phase == .active, let candidate = current?.candidate, candidate.automaticCurl != true
+        else { return }
         guard date >= candidate.startedAt else {
             clockError()
             return
         }
         updateCurrent { $0.candidate?.endedAt = date }
+    }
+
+    func freezeCurl(setID: UUID, estimate: Int, at end: Date, interruption: String? = nil) {
+        guard phase == .active, let candidate = current?.candidate, candidate.id == setID,
+            candidate.automaticCurl == true, (0...Int(Int32.max)).contains(estimate)
+        else { return }
+        guard end >= candidate.startedAt else {
+            clockError()
+            return
+        }
+        updateCurrent {
+            $0.candidate?.endedAt = end
+            $0.candidate?.frozenEstimate = estimate
+            $0.candidate?.interruption = interruption
+            $0.candidate?.reps = min(estimate, 9999)
+        }
     }
 
     func adjustReps(by delta: Int) {
@@ -143,12 +172,14 @@ final class ManualTraining: ObservableObject {
             errorMessage = "0 次不能保存，请增加次数或放弃本组。"
             return
         }
+        let estimate = candidate.frozenEstimate ?? estimatedRepCount
+        guard candidate.automaticCurl != true || candidate.frozenEstimate != nil else { return }
         // v1 的结束清单必须包含全部组。同次训练不能混合手动组和自动组。
-        if let first = current.sets.first, (first.message == nil) != (estimatedRepCount == nil) {
+        if let first = current.sets.first, (first.message == nil) != (estimate == nil) {
             errorMessage = "请结束本次训练，再切换记录方式。"
             return
         }
-        if let estimate = estimatedRepCount {
+        if let estimate {
             do {
                 guard current.sets.count < 1000 else { throw MessageError.limit }
                 candidate.message = try TrainingMessage.saved(
