@@ -71,10 +71,11 @@ struct WorkoutStore {
         precondition(workout.userID == userID, "workout \(workout.workoutID) 不属于当前账号")
         try commit {
             let revision = workout.revision + 1
-            context.insert(
-                DeletedWorkout(
-                    workoutID: workout.workoutID, userID: userID, revision: revision,
-                    endHandoffReceived: workout.endHandoffReceived))
+            let marker = DeletedWorkout(
+                workoutID: workout.workoutID, userID: userID, revision: revision,
+                endHandoffReceived: workout.endHandoffReceived)
+            marker.pendingWatchDeletion = workout.origin == .watch
+            context.insert(marker)
             try enqueue(.delete, workoutID: workout.workoutID, revision: revision, snapshot: nil)
             context.delete(workout)
         }

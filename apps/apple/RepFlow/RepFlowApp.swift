@@ -74,6 +74,7 @@ struct RepFlowApp: App {
         .modelContainer(container)
         // 冷启动也算回到前台：杀掉重开后没传完的任务会接着发
         .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active { inbox.sendPendingDeletions() }
             if phase == .active, let userID = accounts.current?.userID {
                 uploads.sync(userID: userID)
             }

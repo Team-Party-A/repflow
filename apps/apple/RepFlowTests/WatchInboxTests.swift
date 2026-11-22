@@ -5,12 +5,14 @@ import XCTest
 
 private final class RecordingSender: WatchMessageSender {
     var isActivated = true
+    var outstandingDeletions: Set<UUID> = []
     var outstandingTypes: Set<String> = []
     private(set) var sent: [(type: String, payload: [String: Any])] = []
 
     func transfer(_ userInfo: [String: Any]) {
         let payload = try! JSONSerialization.jsonObject(with: userInfo["payload"] as! Data)
-        XCTAssertEqual(userInfo["version"] as? Int, 1)
+        XCTAssertEqual(
+            userInfo["version"] as? Int, userInfo["type"] as? String == "workout_deleted" ? 2 : 1)
         sent.append((userInfo["type"] as! String, payload as! [String: Any]))
     }
 
@@ -95,6 +97,70 @@ final class WatchInboxTests: XCTestCase {
 
     private var acks: [[String: Any]] {
         sender.sent.filter { $0.type == "ack" }.map(\.payload)
+    }
+
+    func testDeletionSurvivesDisconnectAndRestartUntilMatchingWatchReceipt() throws {
+        let store = WorkoutStore(context: context, userID: userA)
+        inbox.receive(setSaved())
+        let workout = try XCTUnwrap(try store.workouts().first)
+        sender.isActivated = false
+        try store.deleteSet(XCTUnwrap(workout.sets.first), of: workout)
+        inbox.sendPendingDeletions()
+        XCTAssertFalse(sender.sent.contains { $0.type == "workout_deleted" })
+
+        let restarted = WatchInbox(
+            context: ModelContext(container), sender: sender,
+            currentUserID: { nil }, onStored: { _ in XCTFail() })
+        sender.isActivated = true
+        sender.outstandingDeletions = [UUID(uuidString: workoutID)!]
+        restarted.requestRetry()
+        XCTAssertFalse(sender.sent.contains { $0.type == "workout_deleted" })
+        sender.outstandingDeletions = []
+        restarted.sendPendingDeletions()
+        XCTAssertEqual(sender.sent.last?.type, "workout_deleted")
+        XCTAssertEqual(sender.sent.last?.payload["workout_id"] as? String, workoutID)
+        // 系统队列已清空、应用重启且仍未收到回执，必须再发同一 ID。
+        let next = WatchInbox(
+            context: ModelContext(container), sender: sender,
+            currentUserID: { nil }, onStored: { _ in XCTFail() })
+        next.receive(envelope("workout_deletion_ack", ["workout_id": firstSetID], version: 2))
+        next.receive(envelope("workout_deletion_ack", ["workout_id": workoutID], version: 1))
+        next.requestRetry()
+        XCTAssertEqual(sender.sent.filter { $0.type == "workout_deleted" }.count, 2)
+        let ack = envelope("workout_deletion_ack", ["workout_id": workoutID], version: 2)
+        next.receive(ack)
+        next.receive(ack)
+        let persisted = ModelContext(container)
+        XCTAssertEqual(
+            try persisted.fetch(FetchDescriptor<DeletedWorkout>()).first?.pendingWatchDeletion,
+            false)
+        XCTAssertEqual(try persisted.fetch(FetchDescriptor<UploadTask>()).first?.kind, .delete)
+        next.requestRetry()
+        XCTAssertEqual(sender.sent.filter { $0.type == "workout_deleted" }.count, 2)
+    }
+
+    func testOnlyWholeWatchWorkoutsAreQueuedIncludingLegacyMarkers() throws {
+        let store = WorkoutStore(context: context, userID: userA)
+        inbox.receive(setSaved())
+        inbox.receive(setSaved(setID: secondSetID, index: 2))
+        let workout = try XCTUnwrap(try store.workouts().first)
+        try store.deleteSet(XCTUnwrap(workout.sets.first), of: workout)
+        inbox.sendPendingDeletions()
+        XCTAssertFalse(sender.sent.contains { $0.type == "workout_deleted" })
+        try store.delete(workout)
+        let watch = try XCTUnwrap(context.fetch(FetchDescriptor<DeletedWorkout>()).first)
+        XCTAssertEqual(watch.pendingWatchDeletion, true)
+        watch.pendingWatchDeletion = nil
+        let phone = DeletedWorkout(
+            workoutID: UUID(), userID: userB, revision: 2, endHandoffReceived: false)
+        context.insert(phone)
+        try context.save()
+        inbox.sendPendingDeletions()
+        XCTAssertEqual(watch.pendingWatchDeletion, true)
+        XCTAssertEqual(phone.pendingWatchDeletion, false)
+        XCTAssertEqual(sender.sent.filter { $0.type == "workout_deleted" }.count, 1)
+        inbox.receive(setSaved())
+        XCTAssertTrue(try store.workouts().isEmpty)
     }
 
     func testFirstSetCreatesWatchWorkoutAndAcksAfterSave() throws {

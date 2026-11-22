@@ -178,6 +178,9 @@ final class DeletedWorkout {
     /// 沿用被删训练的结束交接标记，删除后重复的结束消息仍能认出来
     var endHandoffReceived: Bool
 
+    /// nil 是旧版删除标记，由保留的手表组 ID 识别来源；收到手表回执后置为 false。
+    var pendingWatchDeletion: Bool?
+
     init(workoutID: UUID, userID: UUID, revision: Int32, endHandoffReceived: Bool) {
         self.workoutID = workoutID
         self.userID = userID

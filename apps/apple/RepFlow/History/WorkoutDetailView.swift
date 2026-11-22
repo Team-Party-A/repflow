@@ -11,6 +11,7 @@ struct WorkoutDetailView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var inbox: WatchInbox
     @EnvironmentObject private var uploads: UploadQueue
     @Query private var matches: [Workout]
     /// 一条训练最多一个待发任务，失败原因从这里取
@@ -96,10 +97,10 @@ struct WorkoutDetailView: View {
         .alert("删除这次训练？", isPresented: $isConfirmingDelete) {
             Button("取消", role: .cancel) {}
             Button("删除训练", role: .destructive) {
-                if perform({ try $0.delete(workout) }) { dismiss() }
+                if perform({ try $0.delete(workout) }) { finishDeletion() }
             }
         } message: {
-            Text("它将从历史和统计中移除，删除结果会同步到后端。")
+            Text(deletionExplanation(for: workout))
         }
     }
 
@@ -205,12 +206,14 @@ struct WorkoutDetailView: View {
                     blankReps: false,
                     onDelete: {
                         // 删最后一组等于删整次训练，详情页随之退出
-                        if perform({ try $0.deleteSet(set, of: workout) }), isLast { dismiss() }
+                        if perform({ try $0.deleteSet(set, of: workout) }), isLast {
+                            finishDeletion()
+                        }
                     },
                     deleteConfirmation: isLast
                         ? .init(
                             title: "删除最后一组？",
-                            message: "这次训练只剩这一组，删除后整次训练会从历史和统计中移除，删除结果会同步到后端。",
+                            message: deletionExplanation(for: workout),
                             action: "删除训练")
                         : .init(
                             title: "删除这一组？", message: "本次训练的总组数和动作总次数会随之更新，其他组不变。",
@@ -220,6 +223,17 @@ struct WorkoutDetailView: View {
                     })
             }
         }
+    }
+
+    private func deletionExplanation(for workout: Workout) -> String {
+        workout.origin == .watch
+            ? "整次训练将从手机和后端删除，手表连接后也会删除。"
+            : "整次训练将从手机和后端删除。"
+    }
+
+    private func finishDeletion() {
+        inbox.sendPendingDeletions()
+        dismiss()
     }
 
     /// 写入成功后马上触发上传；失败时给提示，改动已由 store 回滚
