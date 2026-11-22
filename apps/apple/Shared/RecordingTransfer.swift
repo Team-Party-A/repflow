@@ -15,6 +15,10 @@ final class RecordingTransfer: NSObject, ObservableObject, WCSessionDelegate {
 
     override init() {
         super.init()
+        #if os(watchOS)
+            onUserInfo = { TrainingOutbox.shared.receive($0) }
+            onActivated = { TrainingOutbox.shared.check(force: true) }
+        #endif
         if WCSession.isSupported() {
             WCSession.default.delegate = self
             WCSession.default.activate()
@@ -82,6 +86,17 @@ final class RecordingTransfer: NSObject, ObservableObject, WCSessionDelegate {
                 ?? "系统传输完成，请在手机确认文件；手表仍保留原文件。"
         }
     }
+
+    #if os(watchOS)
+        func session(
+            _ session: WCSession, didFinish userInfoTransfer: WCSessionUserInfoTransfer,
+            error: Error?
+        ) {
+            DispatchQueue.main.async {
+                TrainingOutbox.shared.transferFinished(userInfoTransfer.userInfo, error: error)
+            }
+        }
+    #endif
 
     #if os(iOS)
         func sessionDidBecomeInactive(_ session: WCSession) {}

@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var training = ManualTraining()
+    @ObservedObject private var training = TrainingOutbox.shared.training
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var transfer: RecordingTransfer
     @State private var exerciseID = ""
     @State private var confirmDiscard = false
@@ -21,6 +22,10 @@ struct ContentView: View {
                         action("重试读取", icon: "arrow.clockwise", primary: true) { training.reload() }
                     } else {
                         phaseContent
+                        if training.snapshot.workouts.contains(where: { !$0.readyMessages.isEmpty })
+                        {
+                            Button("重试传到手机") { TrainingOutbox.shared.check(force: true) }
+                        }
                     }
                 }
                 .padding(.horizontal, 8).padding(.bottom, 16)
@@ -28,6 +33,9 @@ struct ContentView: View {
             .background(Color("ground"))
             .foregroundStyle(Color("text"))
             .navigationTitle("RepFlow")
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { TrainingOutbox.shared.check(force: true) }
+            }
             .confirmationDialog("放弃本组？已保存的组会保留。", isPresented: $confirmDiscard) {
                 Button("放弃本组", role: .destructive) { training.discardSet() }
                 Button("保留本组", role: .cancel) {}
@@ -46,7 +54,7 @@ struct ContentView: View {
                     Button("继续训练", role: .cancel) {}
                 }
             } message: {
-                Text("已确认的组保留在手表，不发送到手机。")
+                Text("已确认的组会保留在手表。")
             }
         }
     }
@@ -56,6 +64,9 @@ struct ContentView: View {
         case .choose, .rest:
             if training.phase == .rest, let workout = training.current {
                 Label("组间 · 已保存 \(workout.sets.count) 组", systemImage: "checkmark.circle")
+                if let last = workout.sets.last?.message {
+                    Text(last.delivery.label).font(.footnote)
+                }
                 Text("动作总次数 \(workout.totalReps)").font(.footnote)
             }
             Picker("动作", selection: $exerciseID) {
@@ -67,7 +78,7 @@ struct ContentView: View {
                 "开始第 \((training.current?.sets.count ?? 0) + 1) 组", icon: "play.fill",
                 primary: true, enabled: ExerciseCatalog.exercise(id: exerciseID) != nil
             ) { training.startSet(exerciseID: exerciseID) }
-            localNotice
+            if training.current?.sets.first?.message == nil { localNotice }
             if training.phase == .rest { endWorkoutButton }
             if training.phase == .choose {
                 NavigationLink("已保存训练（\(training.snapshot.workouts.count)）") {
@@ -80,7 +91,7 @@ struct ContentView: View {
                                 Text("\(workout.sets.count) 组 · \(workout.totalReps) 次")
                             }
                         }
-                    }.navigationTitle("仅保存在手表")
+                    }.navigationTitle("已保存训练")
                 }
                 NavigationLink("传感器录制") { RecordingView(transfer: transfer) }
             }
@@ -174,12 +185,14 @@ private struct WorkoutSummary: View {
             Text("训练结束").font(.headline)
             Text(workout.startedAt, style: .date).font(.footnote)
             Text("\(workout.sets.count) 组 · \(workout.totalReps) 次").font(.title3.bold())
-            Label("仅保存在手表，不发送到手机", systemImage: "applewatch").font(.footnote)
+            Label(workout.endMessage?.delivery.label ?? "仅保存在手表，不发送到手机", systemImage: "applewatch")
+                .font(.footnote)
             if workout.sets.isEmpty { Text("本次没有保存任何组。").font(.footnote) }
             ForEach(Array(workout.sets.enumerated()), id: \.element.id) { index, set in
                 VStack(alignment: .leading, spacing: 4) {
                     Text("第 \(index + 1) 组 · \(exerciseName(set.exerciseID))")
-                    Text("\(set.reps) 次 · 手动").font(.headline)
+                    Text("\(set.reps) 次").font(.headline)
+                    Text(set.message?.delivery.label ?? "手动").font(.footnote)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8).background(Color("surface"), in: RoundedRectangle(cornerRadius: 12))
             }
