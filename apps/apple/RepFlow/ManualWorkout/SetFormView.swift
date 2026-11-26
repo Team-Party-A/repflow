@@ -54,7 +54,7 @@ struct SetFormView: View {
                     fieldLabel("动作")
                     Menu {
                         Picker("动作", selection: $exerciseID) {
-                            ForEach(ExerciseCatalog.all) { Text($0.displayName).tag($0.id) }
+                            ExercisePickerOptions()
                         }
                     } label: {
                         HStack {

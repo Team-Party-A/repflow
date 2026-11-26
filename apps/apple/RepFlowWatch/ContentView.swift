@@ -75,7 +75,7 @@ struct ContentView: View {
             }
             Picker("动作", selection: $exerciseID) {
                 Text("请选择动作").tag("")
-                ForEach(ExerciseCatalog.all) { Text($0.displayName).tag($0.id) }
+                ExercisePickerOptions()
             }
             .pickerStyle(.navigationLink)
             action(
