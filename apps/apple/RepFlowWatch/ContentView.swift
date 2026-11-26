@@ -73,11 +73,14 @@ struct ContentView: View {
                 }
                 Text("动作总次数 \(workout.totalReps)").font(.footnote)
             }
-            Picker("动作", selection: $exerciseID) {
-                Text("请选择动作").tag("")
-                ExercisePickerOptions()
+            NavigationLink {
+                List { ExerciseChoices(selection: $exerciseID, dismissOnPick: true) }
+                    .navigationTitle("动作")
+            } label: {
+                LabeledContent("动作") {
+                    Text(ExerciseCatalog.exercise(id: exerciseID)?.displayName ?? "请选择动作")
+                }
             }
-            .pickerStyle(.navigationLink)
             action(
                 "开始第 \((training.current?.sets.count ?? 0) + 1) 组", icon: "play.fill",
                 primary: true, enabled: ExerciseCatalog.exercise(id: exerciseID) != nil

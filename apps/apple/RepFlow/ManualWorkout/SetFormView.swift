@@ -53,9 +53,7 @@ struct SetFormView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     fieldLabel("动作")
                     Menu {
-                        Picker("动作", selection: $exerciseID) {
-                            ExercisePickerOptions()
-                        }
+                        ExerciseChoices(selection: $exerciseID)
                     } label: {
                         HStack {
                             Text(exerciseName).foregroundStyle(Palette.text)

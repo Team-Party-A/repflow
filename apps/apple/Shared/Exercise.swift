@@ -124,19 +124,38 @@ enum ExerciseCatalog {
     }()
 }
 
-/// 放进 `Picker` 里的动作选项，手表开组和手机手动记录共用，保证分组和标记一致
-struct ExercisePickerOptions: View {
+/// 按分组列出的动作选项，手表开组和手机手动记录共用。不用 `Picker`：iOS 把 `Picker` 放进
+/// `Menu` 后会丢掉分组标题，所以每个动作是一个按钮，外层 `Menu` 或 `List` 负责呈现。
+struct ExerciseChoices: View {
+    @Binding var selection: String
+    /// 手表上列表是推进来的一页，选完要退回；iOS 的 `Menu` 选完自己会收起，不能再 dismiss，
+    /// 否则会把整个表单关掉
+    var dismissOnPick = false
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         ForEach(ExerciseCatalog.pickerSections) { section in
             Section(section.title) {
                 ForEach(section.exercises) { exercise in
-                    if exercise.isAutoCounted {
-                        Label(exercise.displayName, systemImage: "applewatch").tag(exercise.id)
-                    } else {
-                        Text(exercise.displayName).tag(exercise.id)
+                    Button {
+                        selection = exercise.id
+                        if dismissOnPick { dismiss() }
+                    } label: {
+                        if let icon = icon(for: exercise) {
+                            Label(exercise.displayName, systemImage: icon)
+                        } else {
+                            Text(exercise.displayName)
+                        }
                     }
+                    .accessibilityAddTraits(exercise.id == selection ? .isSelected : [])
                 }
             }
         }
+    }
+
+    /// 自动计次的动作带手表图标；当前选中的显示对勾（自动计次分组的标题已经说明了它）
+    private func icon(for exercise: Exercise) -> String? {
+        if exercise.id == selection { return "checkmark" }
+        return exercise.isAutoCounted ? "applewatch" : nil
     }
 }
