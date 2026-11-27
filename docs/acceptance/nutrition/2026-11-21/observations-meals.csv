@@ -1,0 +1,41 @@
+run_id,sample,stage,status,failure_reason,carbs_g,protein_g,fat_g,energy_kcal,latency_ms,cache_hits_unique,lookups_unique,vision_model,vision_input_tokens,vision_output_tokens,text_model,text_input_tokens,text_output_tokens,currency,cost,rate_reference
+ark-20261121-02,N01,raw,ok,,12.245,3.985,2.675,85.15,10075,0,2,doubao-seed-2-1-pro-260915,1455,72,doubao-seed-2-1-pro-260915,191,86,CNY,0.014616,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N01,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N02,raw,ok,,0.7,4.2,4.55,59.5,6042,0,1,doubao-seed-2-1-pro-260915,1455,30,doubao-seed-2-1-pro-260915,155,48,CNY,0.01200,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N02,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N03,raw,ok,,18.01,19.44,7.43,214.5,6044,0,3,doubao-seed-2-1-pro-260915,1455,92,doubao-seed-2-1-pro-260915,206,129,CNY,0.016596,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N03,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N04,raw,ok,,26.325,12.305,13.095,269.15,8055,0,3,doubao-seed-2-1-pro-260915,1455,93,doubao-seed-2-1-pro-260915,208,132,CNY,0.016728,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N04,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N05,raw,ok,,3.4,1.1,0.26,20.6,6022,0,2,doubao-seed-2-1-pro-260915,1455,71,doubao-seed-2-1-pro-260915,191,86,CNY,0.014586,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N05,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N06,raw,ok,,16.02,23.72,26.37,387.7,8029,1,5,doubao-seed-2-1-pro-260915,1455,130,doubao-seed-2-1-pro-260915,214,172,CNY,0.019074,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N06,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N07,raw,ok,,0.555,27.39,16.305,261.75,6027,0,2,doubao-seed-2-1-pro-260915,1455,65,doubao-seed-2-1-pro-260915,184,87,CNY,0.014394,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N07,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N08,raw,ok,,8,8.4,20,240,8059,0,1,doubao-seed-2-1-pro-260915,1455,36,doubao-seed-2-1-pro-260915,161,51,CNY,0.012306,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N08,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N09,raw,ok,,17.83,11.82,11.82,227.5,8051,1,3,doubao-seed-2-1-pro-260915,1455,81,doubao-seed-2-1-pro-260915,176,90,CNY,0.014916,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N09,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N10,raw,ok,,2.82,0.804,0.996,22.74,6046,0,2,doubao-seed-2-1-pro-260915,1455,62,doubao-seed-2-1-pro-260915,182,87,CNY,0.014292,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N10,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N11,raw,ok,,,,,,8049,1,4,doubao-seed-2-1-pro-260915,1455,139,doubao-seed-2-1-pro-260915,198,128,CNY,0.017928,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N11,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N12,raw,ok,,19,8.16,15.31,230.25,8057,0,3,doubao-seed-2-1-pro-260915,1455,85,doubao-seed-2-1-pro-260915,200,132,CNY,0.01644,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N12,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N13,raw,ok,,3.68,1.68,0.24,22.4,4022,0,1,doubao-seed-2-1-pro-260915,1455,31,doubao-seed-2-1-pro-260915,156,45,CNY,0.011946,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N13,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N14,raw,ok,,11.435,1.455,0.355,51.35,8048,0,4,doubao-seed-2-1-pro-260915,1455,112,doubao-seed-2-1-pro-260915,222,169,CNY,0.018492,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N14,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N15,raw,ok,,24.3,0.36,0.36,97.2,6045,0,1,doubao-seed-2-1-pro-260915,1455,30,doubao-seed-2-1-pro-260915,154,46,CNY,0.011934,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N15,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N16,raw,ok,,2.325,0.53,0.09,11.05,8047,0,2,doubao-seed-2-1-pro-260915,1455,70,doubao-seed-2-1-pro-260915,190,86,CNY,0.01455,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N16,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N17,raw,ok,,22.33,9.635,4.93,172,8059,0,2,doubao-seed-2-1-pro-260915,1455,73,doubao-seed-2-1-pro-260915,193,89,CNY,0.014748,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N17,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N18,raw,ok,,2.7,1.8,0.24,21,4020,0,1,doubao-seed-2-1-pro-260915,1455,30,doubao-seed-2-1-pro-260915,155,45,CNY,0.01191,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N18,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N19,raw,ok,,22.4,3.04,4.8,144,6039,0,1,doubao-seed-2-1-pro-260915,1455,36,doubao-seed-2-1-pro-260915,161,47,CNY,0.012186,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N19,user_confirmed,,,,,,,,,,,,,,,,,,
+ark-20261121-02,N20,raw,ok,,7.13,54.935,6.475,309.8,8040,1,4,doubao-seed-2-1-pro-260915,1455,119,doubao-seed-2-1-pro-260915,208,127,CNY,0.017358,"{""text_input"": ""6"", ""text_output"": ""30"", ""vision_input"": ""6"", ""vision_output"": ""30""}"
+,N20,user_confirmed,,,,,,,,,,,,,,,,,,

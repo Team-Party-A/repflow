@@ -20,6 +20,8 @@ struct TodayView: View {
                     Text(Date.now.formatted(.dateTime.month().day().weekday(.abbreviated)))
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Palette.text2)
+                    NutritionDayView(userID: userID)
+                        .id(userID)
                     SyncBanner(userID: userID)
                     Text("本机已保存 \(workouts.count) 次训练")
                         .foregroundStyle(Palette.text)

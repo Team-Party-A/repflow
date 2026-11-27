@@ -98,6 +98,19 @@ final class AccountStore: ObservableObject {
         return nil
     }
 
+    func nutrition(for userID: UUID) throws -> NutritionAPI {
+        let endpoint = try client()
+        return NutritionAPI(
+            client: endpoint,
+            token: { [weak self] in
+                guard let self, self.current?.userID == userID, let token = self.token(for: userID)
+                else {
+                    throw NutritionError.signIn
+                }
+                return token
+            }, expired: { [weak self] token in self?.expireToken(token, for: userID) })
+    }
+
     private func client() throws -> APIClient {
         guard let api else { throw AccountError.serverNotConfigured }
         return api
