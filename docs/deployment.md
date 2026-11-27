@@ -267,3 +267,26 @@ systemctl --user list-timers repflow-cert-renew.timer
 镜像构建使用 `--build-context api_contract=docs/api`，直接复制契约原文。更新 Swagger UI 时需同时更新版本、发布包校验和并复测页面。每次涉及契约的发布都执行构建和 HTTPS 检查，核对线上文档可下载且与对应提交逐字节一致。
 
 合入后由负责人在浏览器访问 `/docs`，展开账号和训练接口、确认文档版本和样例，下载 `/docs/openapi.yaml` 与发布提交的原文比对。验收通过后，在 #98 留下入口路径供打包。
+
+
+## 饮食记录与识别
+
+饮食接口复用账号会话，前缀为 `/api/v1/nutrition`。手动记餐只需要数据库。启用拍照时，在既有服务器配置渠道设置 `ARK_API_KEY`、`ARK_VISION_MODEL`，以及可选的 `ARK_TEXT_MODEL`（缺省复用视觉模型）。模型值使用已在火山方舟开通的模型或推理接入点 ID。方舟仅接收去元数据的 JPEG 数据，图片上限 4 MiB。模型超时时仍能用手动入口。
+
+每个 UTC 日默认全站 100 餐、每人 20 餐，同时处理 4 个任务。分别用 `NUTRITION_DAILY_LIMIT`、`NUTRITION_USER_DAILY_LIMIT`、`NUTRITION_ACTIVE_LIMIT` 调整。每个任务最多等待 90 秒。豆包 `doubao-seed-2-1-pro-260915` 的识别和营养补全使用关闭深度思考的模式，每次模型请求最多等待响应 38 秒。任务超时或服务重启时遗留的在途任务会过期，食物及已保存餐次保留。
+
+分别为 `ARK_VISION_` 和 `ARK_TEXT_` 设置 `INPUT_CNY_PER_MTOK`、`CACHED_INPUT_CNY_PER_MTOK`、`OUTPUT_CNY_PER_MTOK` 三项每百万 token 人民币费率。服务按方舟返回的用量分别计算普通输入、命中方舟缓存的输入及输出费用。缺少所需用量或费率时费用记为未知。食物库命中另行统计。费用以账号实际账单为准。[方舟模型价格](https://console.volcengine.com/ark/region%3Acn-beijing/docs/model-pricing)
+
+本次 Alembic 从 `0002_workouts` 升至 `0003_nutrition`，增加六张表。先在独立库从旧版本升级，并用旧镜像验证既有账号与训练。生产按上文的人工变更流程，先固定旧镜像、打 `pg_dump -Fc` 备份、校验归档 SHA-256、用 `pg_restore --list` 检查目录，再用候选镜像执行 `alembic upgrade 0003_nutrition`。换回旧应用镜像时保留新增表及餐次；实际降级数据库会删除饮食数据。验收 HTTPS 下的登录、食物、餐次与识别，再登记生产版本。
+
+共享库审核使用已获数据库权限的服务运维入口，执行 `python -m app.nutrition_admin`。下列参数在运行 API 的环境中使用。
+
+| 操作 | 参数 |
+| --- | --- |
+| 查看待审投稿及 AI 估算 | `list` |
+| 核实投稿，或修订共享条目 | `verify <投稿或食物 UUID> --reference '标签或有许可的资料及版本'`，可附 `--profile` 四项每百克 JSON |
+| 驳回投稿 | `reject <投稿 UUID>` |
+| 将重复公开条目并入保留项 | `merge <重复食物 UUID> <保留食物 UUID>` |
+| 核对单次识别的查库、模型用量、时延与成本 | `metrics <识别 UUID>` |
+
+用户必须主动投稿才会把私人食物送审，审核查看的是食物资料。改版或合并保留历史引用，已经保存的餐次按当时版本展示。
