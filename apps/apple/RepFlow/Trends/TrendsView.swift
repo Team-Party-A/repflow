@@ -29,6 +29,20 @@ struct TrendsView: View {
                             DailyChart(summary: summary, period: period)
                         }
                     }
+                    section("肌群") {
+                        if inPeriod.isEmpty {
+                            EmptyHint(text: "练过之后，这里会按肌群对比次数、组数和重量")
+                        } else {
+                            MuscleRadarChart(workouts: inPeriod)
+                        }
+                    }
+                    section("训练部位") {
+                        if inPeriod.isEmpty {
+                            EmptyHint(text: "练过之后，这里会在人体图上标出练到的部位")
+                        } else {
+                            BodyMuscleMap(workouts: inPeriod)
+                        }
+                    }
                     section("动作") {
                         if inPeriod.isEmpty {
                             EmptyHint(text: "练过的动作会按组数列在这里")
