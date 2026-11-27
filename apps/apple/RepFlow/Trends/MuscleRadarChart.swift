@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 肌群雷达图：六个轴，可切换次数、组数、重量。最外圈是本期最大的那个肌群。
-/// 填充用 `text` 色而不是 Volt，理由同 `DailyChart`：浅色模式下 Volt 不能放在 `surface` 上。
+/// 和每日柱状图一样放在墨色卡里，数据多边形用 Volt。
 struct MuscleRadarChart: View {
     let workouts: [Workout]
 
@@ -26,10 +26,10 @@ struct MuscleRadarChart: View {
                     if maxValue > 0 {
                         let ratios = values.map { $0 / maxValue }
                         polygon(ratios: ratios, center: center, radius: radius)
-                            .fill(Palette.text.opacity(0.18))
+                            .fill(Palette.volt.opacity(0.2))
                         polygon(ratios: ratios, center: center, radius: radius)
                             .stroke(
-                                Palette.text, style: StrokeStyle(lineWidth: 1.5, lineJoin: .round))
+                                Palette.volt, style: StrokeStyle(lineWidth: 2, lineJoin: .round))
                     } else {
                         // 只有重量口径会走到这里：本期有训练，但所有组都没填重量
                         Text("本期的组都没有填写重量")
@@ -60,7 +60,7 @@ struct MuscleRadarChart: View {
                 .foregroundStyle(Palette.text2)
         }
         .padding(16)
-        .card()
+        .inkCard()
     }
 
     private func label(_ muscle: MuscleGroup, value: Double) -> some View {

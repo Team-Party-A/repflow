@@ -1,17 +1,17 @@
 import SwiftUI
 
-/// 人体肌群图：正面、背面各一张，按本期组数给六个肌群分四档上色，量越大颜色越浓。
-/// 人形是本项目手绘的坐标（见 `BodyFigure`），不用任何外部图片素材。
+/// 人体肌群图：正面、背面各一张。每块肌肉都有描边，没练到的只留描边，练到的按本期组数
+/// 分四档填 Volt，量越大越浓。整张卡片放在墨色卡里（`inkCard`），浅色模式下也能用 Volt。
+/// 人形和肌肉轮廓是本项目手绘的坐标（见 `BodyFigure`），不用任何外部图片素材。
 struct BodyMuscleMap: View {
     let workouts: [Workout]
 
     var body: some View {
-        let levels = Self.levels(
-            of: TrainingStats.muscleLoad(of: workouts, metric: .sets))
+        let levels = Self.levels(of: TrainingStats.muscleLoad(of: workouts, metric: .sets))
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
-                figure("正面", regions: BodyFigure.front, lines: BodyFigure.abLines, levels: levels)
-                figure("背面", regions: BodyFigure.back, lines: [], levels: levels)
+                figure("正面", parts: BodyFigure.frontRegions, levels: levels)
+                figure("背面", parts: BodyFigure.backRegions, levels: levels)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("人体肌群图")
@@ -24,11 +24,11 @@ struct BodyMuscleMap: View {
                 .foregroundStyle(Palette.text2)
         }
         .padding(16)
-        .card()
+        .inkCard()
     }
 
     private func figure(
-        _ title: String, regions: [BodyFigure.Region], lines: [Path], levels: [MuscleGroup: Int]
+        _ title: String, parts: [BodyFigure.Region], levels: [MuscleGroup: Int]
     ) -> some View {
         VStack(spacing: 6) {
             Canvas { context, size in
@@ -37,20 +37,20 @@ struct BodyMuscleMap: View {
                 let offsetX = (size.width - BodyFigure.size.width * scale) / 2
                 let transform = CGAffineTransform(translationX: offsetX, y: 0)
                     .scaledBy(x: scale, y: scale)
-                for region in regions {
+                context.stroke(
+                    BodyFigure.silhouettePath.applying(transform),
+                    with: .color(Self.lineColor), lineWidth: 1.2)
+                for region in parts {
                     let path = region.path.applying(transform)
-                    let level = region.muscle.flatMap { levels[$0] } ?? 0
-                    context.fill(path, with: .color(Self.fill(level: level)))
-                    // 用卡片底色描边，相邻肌肉之间留出一道缝
-                    context.stroke(path, with: .color(Palette.surface), lineWidth: 1.2)
-                }
-                for line in lines {
-                    context.stroke(
-                        line.applying(transform), with: .color(Palette.surface), lineWidth: 1)
+                    let level = levels[region.muscle] ?? 0
+                    if level > 0 {
+                        context.fill(path, with: .color(Self.fill(level: level)))
+                    }
+                    context.stroke(path, with: .color(Self.lineColor), lineWidth: 1)
                 }
             }
             .aspectRatio(BodyFigure.size.width / BodyFigure.size.height, contentMode: .fit)
-            .frame(maxWidth: .infinity, maxHeight: 280)
+            .frame(maxWidth: .infinity, maxHeight: 300)
             Text(title)
                 .font(.footnote)
                 .foregroundStyle(Palette.text2)
@@ -67,20 +67,21 @@ struct BodyMuscleMap: View {
             Text("多").font(.footnote).foregroundStyle(Palette.text2)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("图例：灰色为未练到，颜色越浓训练量越大")
+        .accessibilityLabel("图例：只有轮廓为未练到，颜色越浓训练量越大")
     }
 
     private func swatch(level: Int) -> some View {
         RoundedRectangle(cornerRadius: 4)
-            .fill(Self.fill(level: level))
+            .fill(level == 0 ? Color.clear : Self.fill(level: level))
+            .strokeBorder(Self.lineColor, lineWidth: 1)
             .frame(width: 18, height: 12)
     }
 
-    /// 0 档是没练到，用 `raised`；1–4 档是 `text` 色逐级加浓：
-    /// 浅色模式里越来越黑，深色模式里越来越亮，两种模式下都是「量越大越显眼」
+    /// 轮廓线：比 `raised` 亮、比 `text2` 暗，既看得出肌肉分块又不抢 Volt
+    private static let lineColor = Palette.text2.opacity(0.6)
+
     private static func fill(level: Int) -> Color {
-        let opacities = [0.3, 0.5, 0.72, 0.95]
-        return level == 0 ? Palette.raised : Palette.text.opacity(opacities[level - 1])
+        Palette.volt.opacity([0.25, 0.45, 0.7, 1][level - 1])
     }
 
     private static func levelName(_ level: Int) -> String {
@@ -97,144 +98,168 @@ struct BodyMuscleMap: View {
     }
 }
 
-/// 正背面人形的手绘坐标。坐标系 120 × 266，只写画面左半边，右半边按中线镜像。
-/// 每块区域给出轮廓点，用 Catmull-Rom 曲线连成圆滑的闭合形状。
+/// 正背面人形的手绘坐标。坐标系 200 × 440，按约 8 头身的比例画；只写画面左半边，
+/// 右半边按中线 x = 100 镜像。轮廓点用闭合的 Catmull-Rom 曲线连成圆滑形状。
 enum BodyFigure {
-    static let size = CGSize(width: 120, height: 266)
+    static let size = CGSize(width: 200, height: 440)
 
     struct Region {
-        /// nil 是头、手、膝、脚这类不归肌群的部位，始终画成未练到的颜色
-        let muscle: MuscleGroup?
+        let muscle: MuscleGroup
         let path: Path
     }
 
-    static let front: [Region] =
-        mirrored([
-            (
-                .shoulders,
-                [(36, 50), (28, 52), (22, 60), (20, 72), (22, 82), (28, 80), (34, 70), (38, 58)]
-            ),
-            (
-                .chest,
-                [
-                    (39, 53), (48, 50), (58, 51), (59, 66), (59, 82), (50, 85), (41, 84), (36, 76),
-                    (37, 62),
-                ]
-            ),
-            (
-                .arms,
-                [
-                    (22, 85), (29, 83), (33, 92), (31, 108), (28, 120), (21, 123), (16, 113),
-                    (16, 97),
-                ]
-            ),
-            (
-                .arms,
-                [
-                    (16, 126), (27, 124), (29, 134), (25, 150), (21, 160), (15, 160), (11, 148),
-                    (12, 135),
-                ]
-            ),
-            (.core, [(48, 88), (59, 88), (59, 140), (51, 137), (48, 122), (47, 104)]),
-            (
-                .core,
-                [
-                    (39, 87), (45, 89), (45, 106), (47, 124), (49, 138), (42, 134), (38, 118),
-                    (37, 100),
-                ]
-            ),
-            (nil, [(39, 138), (50, 141), (59, 146), (59, 152), (48, 152), (38, 147)]),
-            (
-                .legs,
-                [
-                    (37, 150), (49, 155), (58, 157), (57, 180), (52, 204), (44, 208), (36, 200),
-                    (33, 176), (34, 160),
-                ]
-            ),
-            (.legs, [(38, 220), (46, 219), (51, 223), (50, 240), (46, 253), (40, 253), (36, 239)]),
-        ]) + shared
+    enum Part {
+        case shape(MuscleGroup, [(CGFloat, CGFloat)])
+        /// 腹直肌的一节，画成圆角矩形
+        case bar(MuscleGroup, x: ClosedRange<CGFloat>, y: ClosedRange<CGFloat>)
+    }
 
-    static let back: [Region] =
-        mirrored([
-            (.back, [(52, 45), (59, 43), (59, 96), (54, 84), (47, 66), (38, 54), (45, 49)]),
-            (
-                .shoulders,
-                [(36, 53), (28, 53), (22, 60), (20, 72), (22, 82), (28, 80), (33, 70), (37, 61)]
-            ),
-            (
-                .back,
-                [
-                    (38, 63), (45, 68), (52, 86), (57, 100), (51, 108), (42, 114), (37, 104),
-                    (35, 88), (35, 74),
-                ]
-            ),
-            (.back, [(53, 110), (59, 101), (59, 138), (51, 136)]),
-            (.core, [(39, 112), (44, 116), (50, 115), (50, 134), (42, 134), (38, 124)]),
-            (
-                .arms,
-                [
-                    (22, 85), (29, 83), (33, 92), (31, 108), (28, 120), (21, 123), (16, 113),
-                    (16, 97),
-                ]
-            ),
-            (
-                .arms,
-                [
-                    (16, 126), (27, 124), (29, 134), (25, 150), (21, 160), (15, 160), (11, 148),
-                    (12, 135),
-                ]
-            ),
-            (.legs, [(40, 137), (51, 138), (59, 142), (59, 166), (50, 170), (40, 166), (36, 152)]),
-            (
-                .legs,
-                [
-                    (35, 170), (48, 173), (58, 171), (57, 190), (52, 206), (44, 209), (36, 200),
-                    (34, 184),
-                ]
-            ),
-            (.legs, [(37, 220), (46, 217), (52, 222), (52, 236), (46, 249), (40, 249), (35, 236)]),
-        ]) + shared
+    /// 整个人的外轮廓：从头顶中点沿左侧绕到裆部，右半边镜像接回头顶
+    static let silhouettePath: Path = {
+        let left = silhouette.map { CGPoint(x: $0.0, y: $0.1) }
+        let right = left.dropFirst().dropLast().reversed().map { mirror($0) }
+        return smoothPath(left + right)
+    }()
 
-    /// 头、颈、手、膝、脚，正背面相同
-    private static let shared: [Region] =
-        [
-            Region(muscle: nil, path: Path(ellipseIn: CGRect(x: 47, y: 4, width: 26, height: 32))),
-            Region(
-                muscle: nil,
-                path: smoothPath([(52, 33), (68, 33), (68, 45), (60, 47), (52, 45)])),
-        ]
-        + mirrored([
-            (nil, [(14, 162), (21, 162), (22, 172), (18, 180), (12, 178), (11, 168)]),
-            (nil, [(38, 209), (52, 208), (53, 216), (46, 219), (38, 217)]),
-            (nil, [(39, 255), (48, 255), (51, 262), (37, 262)]),
-        ])
+    static let frontRegions = regions(front)
+    static let backRegions = regions(back)
 
-    /// 正面腹肌的中线和横向分节线
-    static let abLines: [Path] =
-        [101, 115, 128].map { y in
-            Path { path in
-                path.move(to: CGPoint(x: 47, y: y))
-                path.addLine(to: CGPoint(x: 73, y: y))
-            }
-        } + [
-            Path { path in
-                path.move(to: CGPoint(x: 60, y: 88))
-                path.addLine(to: CGPoint(x: 60, y: 140))
-            }
-        ]
-
-    private static func mirrored(_ halves: [(MuscleGroup?, [(CGFloat, CGFloat)])]) -> [Region] {
-        halves.flatMap { muscle, points in
+    private static let silhouette: [(CGFloat, CGFloat)] = [
+        (100, 5), (86, 9), (80, 20), (79, 34), (82, 48), (88, 58), (89, 66), (86, 72), (74, 76),
+        (60, 80), (50, 86), (44, 96), (41, 112), (39, 130), (37, 148), (35, 162), (32, 180),
+        (29, 200), (27, 220), (25, 236), (22, 248), (21, 262), (25, 272), (31, 270), (34, 258),
+        (35, 246), (36, 238), (40, 220), (44, 200), (48, 180), (52, 162), (55, 145), (58, 124),
+        (62, 134), (64, 150), (65, 170), (64, 190), (62, 205), (59, 222), (58, 240), (57, 260),
+        (58, 285), (61, 310), (64, 330), (63, 345), (62, 365), (64, 385), (67, 405), (69, 415),
+        (64, 428), (68, 436), (86, 436), (88, 428), (86, 416), (88, 395), (90, 370), (89, 345),
+        (91, 330), (94, 305), (96, 286), (98, 276), (100, 272),
+    ]
+    private static let front: [Part] = [
+        .shape(.back, [(89, 64), (86, 71), (74, 76), (86, 78), (93, 73)]),
+        .shape(
+            .shoulders,
             [
-                Region(muscle: muscle, path: smoothPath(points)),
-                Region(muscle: muscle, path: smoothPath(points.map { (size.width - $0.0, $0.1) })),
-            ]
+                (72, 80), (60, 82), (50, 88), (45, 100), (44, 114), (47, 122), (52, 114), (58, 100),
+                (66, 90),
+            ]),
+        .shape(
+            .chest,
+            [
+                (98, 88), (87, 86), (77, 88), (69, 95), (63, 108), (64, 121), (72, 131), (85, 134),
+                (96, 130), (98, 112),
+            ]),
+        .shape(
+            .arms,
+            [
+                (47, 124), (43, 136), (42, 150), (45, 160), (50, 159), (54, 146), (55, 132),
+                (52, 124),
+            ]),
+        .shape(
+            .arms,
+            [
+                (37, 166), (48, 166), (49, 176), (45, 196), (38, 218), (31, 232), (28, 226),
+                (30, 204), (33, 182),
+            ]),
+        .bar(.core, x: 86...98, y: 139...160),
+        .bar(.core, x: 86...98, y: 163...184),
+        .bar(.core, x: 87...98, y: 187...208),
+        .shape(.core, [(88, 211), (98, 211), (98, 244), (93, 240), (88, 226)]),
+        .shape(
+            .core,
+            [
+                (68, 143), (75, 140), (82, 144), (83, 165), (82, 195), (84, 220), (79, 230),
+                (72, 216), (68, 196), (67, 168),
+            ]),
+        .shape(
+            .legs,
+            [
+                (63, 244), (73, 240), (82, 250), (85, 272), (83, 300), (78, 322), (70, 324),
+                (64, 308), (61, 284), (60, 262),
+            ]),
+        .shape(.legs, [(88, 286), (92, 296), (91, 316), (85, 326), (80, 323), (84, 306)]),
+        .shape(.legs, [(87, 248), (94, 258), (95, 272), (90, 282), (86, 268)]),
+        .shape(
+            .legs,
+            [
+                (65, 340), (72, 338), (78, 350), (78, 378), (74, 402), (70, 404), (66, 385),
+                (63, 360),
+            ]),
+        .shape(.legs, [(82, 345), (88, 348), (89, 370), (86, 392), (82, 388), (81, 366)]),
+    ]
+    private static let back: [Part] = [
+        .shape(
+            .back,
+            [
+                (100, 62), (93, 68), (84, 74), (70, 79), (63, 83), (77, 90), (88, 106), (96, 130),
+                (100, 145), (100, 100),
+            ]),
+        .shape(
+            .shoulders,
+            [(60, 84), (52, 87), (46, 96), (44, 112), (48, 122), (55, 110), (62, 96), (68, 89)]),
+        .shape(.back, [(64, 96), (72, 94), (84, 104), (86, 118), (76, 124), (66, 118), (60, 106)]),
+        .shape(
+            .back,
+            [
+                (60, 124), (72, 128), (86, 132), (95, 142), (93, 164), (86, 188), (78, 200),
+                (70, 188), (66, 164), (63, 140),
+            ]),
+        .shape(
+            .back, [(97, 150), (99, 152), (99, 228), (91, 230), (88, 214), (92, 192), (96, 170)]),
+        .shape(
+            .core, [(68, 196), (76, 202), (84, 210), (86, 226), (76, 230), (68, 218), (66, 205)]),
+        .shape(
+            .arms, [(47, 124), (43, 136), (42, 152), (46, 162), (52, 160), (55, 144), (55, 128)]),
+        .shape(
+            .arms,
+            [
+                (37, 166), (48, 166), (49, 176), (45, 196), (38, 218), (31, 232), (28, 226),
+                (30, 204), (33, 182),
+            ]),
+        .shape(
+            .legs,
+            [
+                (99, 236), (86, 232), (70, 234), (61, 246), (60, 262), (65, 276), (78, 282),
+                (92, 280), (99, 270),
+            ]),
+        .shape(
+            .legs, [(62, 290), (72, 290), (78, 300), (76, 324), (70, 330), (64, 316), (61, 300)]),
+        .shape(
+            .legs, [(80, 290), (90, 290), (93, 300), (90, 322), (82, 330), (78, 318), (80, 300)]),
+        .shape(
+            .legs, [(63, 342), (72, 338), (76, 350), (75, 375), (70, 388), (65, 378), (62, 358)]),
+        .shape(
+            .legs, [(79, 338), (87, 340), (90, 352), (88, 378), (82, 392), (78, 376), (78, 352)]),
+    ]
+
+    private static func regions(_ parts: [Part]) -> [Region] {
+        parts.flatMap { part -> [Region] in
+            switch part {
+            case .shape(let muscle, let raw):
+                let points = raw.map { CGPoint(x: $0.0, y: $0.1) }
+                return [
+                    Region(muscle: muscle, path: smoothPath(points)),
+                    Region(muscle: muscle, path: smoothPath(points.map(mirror))),
+                ]
+            case .bar(let muscle, let x, let y):
+                let rect = CGRect(
+                    x: x.lowerBound, y: y.lowerBound, width: x.upperBound - x.lowerBound,
+                    height: y.upperBound - y.lowerBound)
+                let mirrored = CGRect(
+                    x: size.width - x.upperBound, y: rect.minY, width: rect.width,
+                    height: rect.height)
+                return [rect, mirrored].map {
+                    Region(muscle: muscle, path: Path(roundedRect: $0, cornerRadius: 3))
+                }
+            }
         }
     }
 
+    private static func mirror(_ point: CGPoint) -> CGPoint {
+        CGPoint(x: size.width - point.x, y: point.y)
+    }
+
     /// 闭合的 Catmull-Rom 曲线，转成三次贝塞尔
-    private static func smoothPath(_ raw: [(CGFloat, CGFloat)]) -> Path {
-        let points = raw.map { CGPoint(x: $0.0, y: $0.1) }
+    private static func smoothPath(_ points: [CGPoint]) -> Path {
         let count = points.count
         return Path { path in
             path.move(to: points[0])

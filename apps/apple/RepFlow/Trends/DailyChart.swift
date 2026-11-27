@@ -2,7 +2,7 @@ import Charts
 import SwiftUI
 
 /// 每日柱状图：按天一根柱子，可切换指标，虚线是本期平均值，点柱子看当天数值。
-/// 柱子用 `text` 色而不是 Volt：卡片是 `surface` 底，浅色模式下 Volt 不能放在浅色底上（UI 规范 2.2）。
+/// 配色同 UI 原型的统计卡：墨色卡里其他天是灰柱，选中的那天（没选时是今天）用 Volt。
 struct DailyChart: View {
     let summary: PeriodSummary
     let period: StatsPeriod
@@ -14,6 +14,7 @@ struct DailyChart: View {
         let average = summary.average(of: metric)
         let trainedDays = summary.days.filter { $0.totals.workoutCount > 0 }
         let selected = selectedDay.flatMap { day in trainedDays.first { $0.day == day } }
+        let highlightedDay = selected?.day ?? Calendar.stats.startOfDay(for: Date())
         VStack(alignment: .leading, spacing: 12) {
             SegmentedPicker(selection: $metric, options: DailyMetric.allCases, title: \.title)
             readout(selected: selected, average: average)
@@ -25,8 +26,7 @@ struct DailyChart: View {
                         y: .value(metric.title, metric.display(day.totals.value(of: metric)))
                     )
                     .foregroundStyle(
-                        selected == nil || selected?.day == day.day
-                            ? Palette.text : Palette.text2.opacity(0.4)
+                        day.day == highlightedDay ? Palette.volt : Palette.text2.opacity(0.35)
                     )
                     .cornerRadius(3)
                 }
@@ -60,7 +60,7 @@ struct DailyChart: View {
             .frame(height: 180)
         }
         .padding(16)
-        .card()
+        .inkCard()
         .onChange(of: period) { selectedDay = nil }
     }
 
