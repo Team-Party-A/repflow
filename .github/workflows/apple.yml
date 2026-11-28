@@ -63,6 +63,30 @@ jobs:
           xcodebuild build -project RepFlow.xcodeproj -scheme RepFlow \
             -configuration Debug -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/repflow-derived-data" CODE_SIGNING_ALLOWED=NO
+      - name: Package the simulator App for PR 161 acceptance
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 161 && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          products="$RUNNER_TEMP/repflow-derived-data/Build/Products/Debug-iphonesimulator"
+          info="$products/RepFlow.app/Info.plist"
+          python3 - "$info" <<'PYTHON'
+          import plistlib
+          import sys
+
+          with open(sys.argv[1], "rb") as stream:
+              info = plistlib.load(stream)
+          if info["CFBundleSupportedPlatforms"] != ["iPhoneSimulator"] or info.get("RepFlowAPIBaseURL"):
+              sys.exit("Expected a simulator App with an unconfigured API address")
+          PYTHON
+          tar -czf "$RUNNER_TEMP/repflow-simulator.tar.gz" -C "$products" RepFlow.app
+      - name: Retain the simulator App for one day
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 161 && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: repflow-simulator-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/repflow-simulator.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
       - name: Run iOS XCTest on iOS 27.0
         run: |
           xcodebuild test -project RepFlow.xcodeproj -scheme RepFlow \
