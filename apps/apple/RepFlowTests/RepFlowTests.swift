@@ -17,4 +17,39 @@ final class RepFlowTests: XCTestCase {
         }
         XCTAssertNil(ExerciseCatalog.exercise(id: "curl"))
     }
+
+    // 已发布的 id 和显示名进了历史记录和后端，改了旧记录会变成「未知动作」
+    func testPublishedExercisesUnchangedAndNewOnesManual() {
+        let published = [
+            "dumbbell_curl": "哑铃弯举", "dumbbell_shoulder_press": "哑铃肩推",
+            "dumbbell_squat": "持哑铃深蹲", "bench_press": "卧推", "deadlift": "硬拉",
+            "pull_up": "引体向上", "push_up": "俯卧撑",
+        ]
+        for (id, name) in published {
+            XCTAssertEqual(ExerciseCatalog.exercise(id: id)?.displayName, name, id)
+        }
+        for exercise in ExerciseCatalog.all where published[exercise.id] == nil {
+            XCTAssertFalse(exercise.isAutoCounted, exercise.id)
+        }
+    }
+
+    func testMuscleAnnotationsAndPickerSections() {
+        for exercise in ExerciseCatalog.all {
+            XCTAssertTrue((1...2).contains(exercise.primaryMuscles.count), exercise.id)
+            XCTAssertTrue((0...3).contains(exercise.secondaryMuscles.count), exercise.id)
+            XCTAssertTrue(
+                Set(exercise.primaryMuscles).isDisjoint(with: exercise.secondaryMuscles),
+                exercise.id)
+        }
+        for group in MuscleGroup.allCases {
+            let count = ExerciseCatalog.all.filter { $0.primaryMuscles.contains(group) }.count
+            XCTAssertGreaterThanOrEqual(count, 2, group.rawValue)
+        }
+
+        let sections = ExerciseCatalog.pickerSections
+        XCTAssertEqual(sections.first?.title, "自动计次")
+        XCTAssertTrue(sections.first?.exercises.allSatisfy(\.isAutoCounted) ?? false)
+        let listed = sections.flatMap(\.exercises).map(\.id)
+        XCTAssertEqual(listed.sorted(), ExerciseCatalog.all.map(\.id).sorted())
+    }
 }

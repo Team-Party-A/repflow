@@ -62,7 +62,7 @@ struct HistoryView: View {
                 .padding(.horizontal, 20)
             }
             .pageBackground()
-            .navigationTitle("历史")
+            .navigationTitle("训练")
             .navigationDestination(for: UUID.self) { workoutID in
                 WorkoutDetailView(userID: userID, workoutID: workoutID)
             }
