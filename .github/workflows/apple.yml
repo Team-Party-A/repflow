@@ -68,12 +68,13 @@ jobs:
         run: |
           # 模拟器通过链接时的 App 标识访问自己的钥匙串。无签名的测试宿主仅用于 XCTest。
           entitlements="$RUNNER_TEMP/repflow-161-simulator.entitlements"
+          config="$RUNNER_TEMP/repflow-161-simulator.xcconfig"
+          printf 'CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*] = %s\n' "$entitlements" > "$config"
           /usr/libexec/PlistBuddy -c 'Add :application-identifier string SIM161TEST.$(PRODUCT_BUNDLE_IDENTIFIER)' "$entitlements"
           xcodebuild build -project RepFlow.xcodeproj -scheme RepFlow \
             -configuration Debug -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/repflow-derived-data" \
-            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- \
-            "CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]=$entitlements"
+            -xcconfig "$config" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
           products="$RUNNER_TEMP/repflow-derived-data/Build/Products/Debug-iphonesimulator"
           info="$products/RepFlow.app/Info.plist"
           python3 - "$info" <<'PYTHON'
