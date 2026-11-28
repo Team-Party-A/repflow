@@ -66,21 +66,23 @@ struct TodayView: View {
         let week = TrainingWeek(
             sessions: workouts.map { ($0.startedAt, $0.endedAt) }, now: now, calendar: .current)
         return VStack(alignment: .leading, spacing: 14) {
-            HStack {
+            HStack(spacing: 2) {
                 ForEach(week.days, id: \.self) { date in
                     let logged = week.trained.contains(date)
                     let today = Calendar.current.isDate(date, inSameDayAs: now)
                     Button(action: openTraining) {
                         VStack {
                             Text(date.formatted(.dateTime.weekday(.narrow))).font(.caption)
-                            Text(date.formatted(.dateTime.day())).bold(today)
-                                .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
+                            Text(Calendar.current.component(.day, from: date), format: .number)
+                                .font(.subheadline).monospacedDigit().bold(today)
+                                .lineLimit(1).minimumScaleFactor(0.65)
+                                .frame(width: 32, height: 32)
                                 .background(Circle().fill(logged ? Palette.volt : Palette.raised))
                                 .foregroundStyle(logged ? Color.black : Palette.text)
                                 .overlay {
                                     if today { Circle().stroke(Palette.text, lineWidth: 2) }
                                 }
-                        }
+                        }.frame(maxWidth: .infinity)
                     }.buttonStyle(.plain)
                         .accessibilityLabel(
                             "\(date.formatted(date: .complete, time: .omitted))，\(logged ? "有训练" : "无训练")"
