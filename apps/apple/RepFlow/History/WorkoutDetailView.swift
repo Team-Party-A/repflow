@@ -76,7 +76,9 @@ struct WorkoutDetailView: View {
                     .disabled(workout.sets.isEmpty)
                     .sheet(isPresented: $savingTemplate) {
                         let rows = workout.orderedSets.map {
-                            DraftSet(exerciseID: $0.exerciseID, reps: $0.finalRepCount, weightGrams: $0.weightGrams)
+                            DraftSet(
+                                exerciseID: $0.exerciseID, reps: $0.finalRepCount,
+                                weightGrams: $0.weightGrams)
                         }
                         TemplateEditor(userID: userID, starting: TemplateTarget.from(rows))
                     }

@@ -10,11 +10,14 @@ final class TodayTemplateTests: XCTestCase {
         let utc = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = utc
-        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 5, hour: 12)))
+        let now = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2026, month: 1, day: 5, hour: 12)))
         let monday = calendar.startOfDay(for: now)
         let sunday = monday.addingTimeInterval(-600)
         let priorSunday = sunday.addingTimeInterval(-7 * 86400)
-        let sessions: [(start: Date, end: Date?)] = [(sunday, monday.addingTimeInterval(900)), (priorSunday, nil)]
+        let sessions: [(start: Date, end: Date?)] = [
+            (sunday, monday.addingTimeInterval(900)), (priorSunday, nil),
+        ]
         let week = TrainingWeek(sessions: sessions, now: now, calendar: calendar)
         XCTAssertEqual(week.days.count, 7)
         XCTAssertEqual(week.days.first, monday)
@@ -39,7 +42,8 @@ final class TodayTemplateTests: XCTestCase {
             DraftSet(exerciseID: "dumbbell_curl", reps: 6, weightGrams: 5000),
             DraftSet(exerciseID: "push_up", reps: 9, weightGrams: 0),
         ]
-        let template = TrainingTemplate(userID: owner, name: "周末", targets: TemplateTarget.from(sets))
+        let template = TrainingTemplate(
+            userID: owner, name: "周末", targets: TemplateTarget.from(sets))
         context.insert(template)
         context.insert(TrainingTemplate(userID: other, name: "周末", targets: []))
         try context.save()
@@ -55,6 +59,8 @@ final class TodayTemplateTests: XCTestCase {
         context.delete(template)
         try context.save()
         XCTAssertEqual(actual.map(\.reps), [8, 8, 6, 9])
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor(predicate: TrainingTemplate.owned(by: other))), 1)
+        XCTAssertEqual(
+            try context.fetchCount(FetchDescriptor(predicate: TrainingTemplate.owned(by: other))), 1
+        )
     }
 }

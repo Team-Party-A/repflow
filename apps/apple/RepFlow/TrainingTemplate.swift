@@ -12,10 +12,14 @@ struct TemplateTarget: Identifiable, Equatable {
         var targets: [Self] = []
         for row in rows {
             if let last = targets.indices.last, targets[last].exerciseID == row.exerciseID,
-                targets[last].reps == row.reps, targets[last].weightGrams == row.weightGrams {
+                targets[last].reps == row.reps, targets[last].weightGrams == row.weightGrams
+            {
                 targets[last].sets += 1
             } else {
-                targets.append(Self(exerciseID: row.exerciseID, sets: 1, reps: row.reps, weightGrams: row.weightGrams))
+                targets.append(
+                    Self(
+                        exerciseID: row.exerciseID, sets: 1, reps: row.reps,
+                        weightGrams: row.weightGrams))
             }
         }
         return targets
@@ -24,7 +28,9 @@ struct TemplateTarget: Identifiable, Equatable {
     static func prefill(_ targets: [Self]) -> [DraftSet] {
         targets.flatMap { target in
             (0..<target.sets).map { _ in
-                DraftSet(exerciseID: target.exerciseID, reps: target.reps, weightGrams: target.weightGrams)
+                DraftSet(
+                    exerciseID: target.exerciseID, reps: target.reps,
+                    weightGrams: target.weightGrams)
             }
         }
     }
@@ -42,10 +48,14 @@ final class TrainingTemplate {
         templateID = UUID()
         self.userID = userID
         self.name = name
-        self.targets = targets.enumerated().map { TrainingTarget(position: $0.offset, target: $0.element) }
+        self.targets = targets.enumerated().map {
+            TrainingTarget(position: $0.offset, target: $0.element)
+        }
     }
 
-    var orderedTargets: [TemplateTarget] { targets.sorted { $0.position < $1.position }.map(\.value) }
+    var orderedTargets: [TemplateTarget] {
+        targets.sorted { $0.position < $1.position }.map(\.value)
+    }
 
     static func owned(by userID: UUID) -> Predicate<TrainingTemplate> {
         #Predicate { $0.userID == userID }
@@ -89,11 +99,13 @@ struct TrainingWeek {
         days = (0..<7).map { calendar.date(byAdding: .day, value: $0, to: monday)! }
         let started = sessions.filter { $0.start <= now }
         trained = Set(started.map { calendar.startOfDay(for: $0.start) })
-        let weeks = Set(trained.map { day in
-            let offset = (calendar.component(.weekday, from: day) + 5) % 7
-            return calendar.date(byAdding: .day, value: -offset, to: day)!
-        })
-        var week = weeks.contains(monday) ? monday : calendar.date(byAdding: .day, value: -7, to: monday)!
+        let weeks = Set(
+            trained.map { day in
+                let offset = (calendar.component(.weekday, from: day) + 5) % 7
+                return calendar.date(byAdding: .day, value: -offset, to: day)!
+            })
+        var week =
+            weeks.contains(monday) ? monday : calendar.date(byAdding: .day, value: -7, to: monday)!
         var consecutive = 0
         while weeks.contains(week) {
             consecutive += 1

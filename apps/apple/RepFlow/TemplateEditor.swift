@@ -43,7 +43,9 @@ struct TemplateEditor: View {
                     .onMove { rows.move(fromOffsets: $0, toOffset: $1) }
                     Button("添加动作") {
                         guard let first = ExerciseCatalog.all.first else { return }
-                        rows.append(TemplateRow(.init(exerciseID: first.id, sets: 1, reps: 8, weightGrams: nil)))
+                        rows.append(
+                            TemplateRow(
+                                .init(exerciseID: first.id, sets: 1, reps: 8, weightGrams: nil)))
                     }
                 }
                 if let error { Text(error).foregroundStyle(Palette.red) }
@@ -54,7 +56,9 @@ struct TemplateEditor: View {
                 ToolbarItem(placement: .topBarLeading) { EditButton() }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存", action: save)
-                        .disabled(rows.isEmpty || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(
+                            rows.isEmpty
+                                || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
@@ -72,10 +76,15 @@ struct TemplateEditor: View {
             return
         }
         if let original {
-            guard original.userID == userID else { error = "模板所属账号已变化"; return }
+            guard original.userID == userID else {
+                error = "模板所属账号已变化"
+                return
+            }
             original.name = trimmed
             let previous = original.targets
-            original.targets = targets.enumerated().map { TrainingTarget(position: $0.offset, target: $0.element) }
+            original.targets = targets.enumerated().map {
+                TrainingTarget(position: $0.offset, target: $0.element)
+            }
             for target in previous { context.delete(target) }
         } else {
             context.insert(TrainingTemplate(userID: userID, name: trimmed, targets: targets))
@@ -103,6 +112,8 @@ private struct TemplateRow: Identifiable {
         weight = SetInput.weightText(grams: target.weightGrams)
     }
     func target() throws(SetInput.ValidationError) -> TemplateTarget {
-        try TemplateTarget(exerciseID: exerciseID, sets: sets, reps: SetInput.reps(from: reps), weightGrams: SetInput.weightGrams(from: weight))
+        try TemplateTarget(
+            exerciseID: exerciseID, sets: sets, reps: SetInput.reps(from: reps),
+            weightGrams: SetInput.weightGrams(from: weight))
     }
 }

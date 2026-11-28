@@ -41,8 +41,12 @@ struct TodayView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text("最近一次训练").font(.headline)
-                                Text(latest.startedAt.formatted(date: .abbreviated, time: .shortened))
-                                Text("\(latest.exerciseIDs.count) 个动作 · \(latest.sets.count) 组 · \(latest.totalReps) 次")
+                                Text(
+                                    latest.startedAt.formatted(date: .abbreviated, time: .shortened)
+                                )
+                                Text(
+                                    "\(latest.exerciseIDs.count) 个动作 · \(latest.sets.count) 组 · \(latest.totalReps) 次"
+                                )
                             }.frame(maxWidth: .infinity, alignment: .leading).padding().card()
                         }.buttonStyle(.plain)
                     }
@@ -52,12 +56,15 @@ struct TodayView: View {
             }
             .pageBackground()
             .navigationTitle("今天")
-            .sheet(item: $recording) { draft in ManualWorkoutView(userID: userID, initialSets: draft.sets) }
+            .sheet(item: $recording) { draft in
+                ManualWorkoutView(userID: userID, initialSets: draft.sets)
+            }
         }
     }
 
     private func progress(now: Date) -> some View {
-        let week = TrainingWeek(sessions: workouts.map { ($0.startedAt, $0.endedAt) }, now: now, calendar: .current)
+        let week = TrainingWeek(
+            sessions: workouts.map { ($0.startedAt, $0.endedAt) }, now: now, calendar: .current)
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 ForEach(week.days, id: \.self) { date in
@@ -70,22 +77,31 @@ struct TodayView: View {
                                 .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
                                 .background(Circle().fill(logged ? Palette.volt : Palette.raised))
                                 .foregroundStyle(logged ? Color.black : Palette.text)
-                                .overlay { if today { Circle().stroke(Palette.text, lineWidth: 2) } }
+                                .overlay {
+                                    if today { Circle().stroke(Palette.text, lineWidth: 2) }
+                                }
                         }
                     }.buttonStyle(.plain)
-                    .accessibilityLabel("\(date.formatted(date: .complete, time: .omitted))，\(logged ? "有训练" : "无训练")")
+                        .accessibilityLabel(
+                            "\(date.formatted(date: .complete, time: .omitted))，\(logged ? "有训练" : "无训练")"
+                        )
                 }
             }
             HStack(spacing: 12) {
                 ZStack {
                     Circle().stroke(Palette.raised, lineWidth: 5)
-                    Circle().trim(from: 0, to: min(1, CGFloat(week.minutes) / CGFloat(max(1, goal))))
-                        .stroke(Palette.volt, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
+                    Circle().trim(
+                        from: 0, to: min(1, CGFloat(week.minutes) / CGFloat(max(1, goal)))
+                    )
+                    .stroke(Palette.volt, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
                     Image(systemName: "timer")
                 }.frame(width: 44, height: 44).accessibilityHidden(true)
                 VStack(alignment: .leading) {
-                    Text(week.streak > 0 ? "连续训练 \(week.streak) 周" : week.trained.isEmpty ? "开始你的第一周" : "本周练一次，重新开始连续记录")
+                    Text(
+                        week.streak > 0
+                            ? "连续训练 \(week.streak) 周"
+                            : week.trained.isEmpty ? "开始你的第一周" : "本周练一次，重新开始连续记录")
                     Text("本周 \(week.minutes) / \(goal) 分钟").font(.headline)
                     if week.minutes > goal { Text("超出目标 \(week.minutes-goal) 分钟").font(.caption) }
                 }
@@ -96,7 +112,9 @@ struct TodayView: View {
 
 struct WeeklyGoalSetting: View {
     @AppStorage private var minutes: Int
-    init(userID: UUID) { _minutes = AppStorage(wrappedValue: 120, "weeklyMinutes.\(userID.uuidString)") }
+    init(userID: UUID) {
+        _minutes = AppStorage(wrappedValue: 120, "weeklyMinutes.\(userID.uuidString)")
+    }
     var body: some View {
         Stepper("本周时长目标 \(minutes) 分钟", value: $minutes, in: 5...10080, step: 5)
             .padding().card()
@@ -126,7 +144,9 @@ private struct TemplateShelf: View {
                 HStack {
                     ForEach(templates) { template in
                         let targets = template.orderedTargets
-                        let names = targets.map(\.exerciseID).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+                        let names = targets.map(\.exerciseID).reduce(into: [String]()) {
+                            if !$0.contains($1) { $0.append($1) }
+                        }
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Image(systemName: "dumbbell")
@@ -134,20 +154,28 @@ private struct TemplateShelf: View {
                                 Menu {
                                     Button("编辑") { editing = template }
                                     Button("删除", role: .destructive) { deletion = template }
-                                } label: { Image(systemName: "ellipsis.circle") }
+                                } label: {
+                                    Image(systemName: "ellipsis.circle")
+                                }
                                 .accessibilityLabel("管理\(template.name)")
                             }
-                            Button { start(TemplateTarget.prefill(targets)) } label: {
+                            Button {
+                                start(TemplateTarget.prefill(targets))
+                            } label: {
                                 VStack(alignment: .leading) {
                                     Text(template.name).font(.headline)
                                     Text("\(names.count) 个动作").font(.caption)
-                                    Text(names.prefix(2).map(ExerciseName.of).joined(separator: "、"))
-                                        .font(.caption).lineLimit(2)
+                                    Text(
+                                        names.prefix(2).map(ExerciseName.of).joined(separator: "、")
+                                    )
+                                    .font(.caption).lineLimit(2)
                                 }.frame(maxWidth: .infinity, alignment: .leading)
                             }.buttonStyle(.plain)
                         }.padding().frame(width: 175).card()
                     }
-                    Button { creating = true } label: {
+                    Button {
+                        creating = true
+                    } label: {
                         Label("新建模板", systemImage: "plus").padding().card()
                     }
                 }
@@ -155,15 +183,28 @@ private struct TemplateShelf: View {
         }
         .sheet(isPresented: $creating) { TemplateEditor(userID: userID) }
         .sheet(item: $editing) { TemplateEditor(userID: userID, original: $0) }
-        .confirmationDialog("删除模板？", isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), presenting: deletion) { item in
+        .confirmationDialog(
+            "删除模板？",
+            isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }),
+            presenting: deletion
+        ) { item in
             Button("删除模板", role: .destructive) {
                 context.delete(item)
-                do { try context.save() }
-                catch { context.rollback(); self.error = error.localizedDescription }
+                do {
+                    try context.save()
+                } catch {
+                    context.rollback()
+                    self.error = error.localizedDescription
+                }
             }
-        } message: { _ in Text("已保存的训练会保留。") }
-        .alert("删除失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+        } message: { _ in
+            Text("已保存的训练会保留。")
+        }
+        .alert("删除失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } }))
+        {
             Button("好") {}
-        } message: { Text(error ?? "") }
+        } message: {
+            Text(error ?? "")
+        }
     }
 }
