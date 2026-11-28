@@ -16,6 +16,7 @@ struct WorkoutDetailView: View {
     @Query private var matches: [Workout]
     /// 一条训练最多一个待发任务，失败原因从这里取
     @Query private var tasks: [UploadTask]
+    @State private var savingTemplate = false
     @State private var sheet: SetSheet?
     @State private var isConfirmingDelete = false
     @State private var errorMessage: String?
@@ -71,6 +72,16 @@ struct WorkoutDetailView: View {
                 }
                 statusBanner(workout.syncStatus)
                 summary(of: workout)
+                Button("另存为模板") { savingTemplate = true }
+                    .disabled(workout.sets.isEmpty)
+                    .sheet(isPresented: $savingTemplate) {
+                        let rows = workout.orderedSets.map {
+                            DraftSet(
+                                exerciseID: $0.exerciseID, reps: $0.finalRepCount,
+                                weightGrams: $0.weightGrams)
+                        }
+                        TemplateEditor(userID: userID, starting: TemplateTarget.from(rows))
+                    }
                 ForEach(workout.exerciseIDs, id: \.self) { exerciseID in
                     group(exerciseID, of: workout)
                 }

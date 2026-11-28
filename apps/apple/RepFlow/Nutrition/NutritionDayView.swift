@@ -29,6 +29,7 @@ struct NutrientSummary: View {
 
 struct NutritionDayView: View {
     let userID: UUID
+    var browsingHistory = false
     @EnvironmentObject private var accounts: AccountStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedDate = Date.now
@@ -41,10 +42,19 @@ struct NutritionDayView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("饮食记录").font(.headline)
+                Text(Calendar.current.isDateInToday(selectedDate) ? "今日摄入" : "当日摄入").font(.headline)
                 Spacer()
-                DatePicker("查看日期", selection: $selectedDate, displayedComponents: .date)
-                    .labelsHidden().accessibilityLabel("查看饮食记录日期")
+                if browsingHistory {
+                    DatePicker("查看日期", selection: $selectedDate, displayedComponents: .date)
+                        .labelsHidden().accessibilityLabel("查看饮食记录日期")
+                } else {
+                    NavigationLink("饮食历史") {
+                        ScrollView {
+                            NutritionDayView(userID: userID, browsingHistory: true).padding()
+                        }
+                        .navigationTitle("饮食历史")
+                    }
+                }
             }
             if let day {
                 NutrientSummary(values: day.totals)
@@ -82,14 +92,15 @@ struct NutritionDayView: View {
             }
             if let message {
                 Text(message).font(.footnote).foregroundStyle(.secondary)
-                Button("重新读取") { generation = UUID() }
+                Button("重试") { generation = UUID() }
             }
             Button {
+                let dayToRecord = browsingHistory ? selectedDate : Date.now
                 let time = Calendar.current.dateComponents([.hour, .minute], from: .now)
                 let date =
                     Calendar.current.date(
                         bySettingHour: time.hour ?? 12, minute: time.minute ?? 0,
-                        second: 0, of: selectedDate) ?? selectedDate
+                        second: 0, of: dayToRecord) ?? dayToRecord
                 draft = MealDraft(date: date)
             } label: {
                 Label("记一餐", systemImage: "fork.knife").font(.body.weight(.semibold))
@@ -100,7 +111,7 @@ struct NutritionDayView: View {
         .task(id: generation) {
             day = nil
             message = nil
-            let date = selectedDate
+            let date = browsingHistory ? selectedDate : .now
             do {
                 let result = try await accounts.nutrition(for: userID).day(date)
                 if !Task.isCancelled { day = result }
@@ -109,10 +120,14 @@ struct NutritionDayView: View {
             }
         }
         .onChange(of: selectedDate) { _, _ in generation = UUID() }
+        .onAppear { generation = UUID() }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            if !browsingHistory { selectedDate = .now }
+        }
         .onChange(of: scenePhase) { _, phase in if phase == .active { generation = UUID() } }
         .sheet(item: $draft, onDismiss: { generation = UUID() }) { initial in
             MealEditor(userID: userID, initial: initial) { date in
-                selectedDate = date
+                selectedDate = browsingHistory ? date : .now
                 draft = nil
             }
         }

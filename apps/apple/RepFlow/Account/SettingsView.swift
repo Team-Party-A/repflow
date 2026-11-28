@@ -49,6 +49,7 @@ struct SettingsView: View {
                     .padding(16)
                     .card()
 
+                    WeeklyGoalSetting(userID: account.userID)
                     Text("同步")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Palette.text2)
