@@ -1,9 +1,10 @@
 import SwiftData
 import SwiftUI
 
-/// 设置页：当前账号、同步状态与退出登录
+/// 「我的」页：当前账号、同步状态、开发者选项与退出登录
 struct SettingsView: View {
     let account: Account
+    @ObservedObject var transfer: RecordingTransfer
 
     @EnvironmentObject private var accounts: AccountStore
     @EnvironmentObject private var uploads: UploadQueue
@@ -12,8 +13,9 @@ struct SettingsView: View {
     @Query private var tasks: [UploadTask]
     @State private var isConfirmingLogout = false
 
-    init(account: Account) {
+    init(account: Account, transfer: RecordingTransfer = .shared) {
         self.account = account
+        self.transfer = transfer
         _workouts = Query(filter: WorkoutStore.owned(by: account.userID))
         _tasks = Query(filter: WorkoutStore.uploadTasks(of: account.userID))
     }
@@ -69,6 +71,28 @@ struct SettingsView: View {
                         .buttonStyle(SecondaryButtonStyle())
                     }
 
+                    Text("开发者选项")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Palette.text2)
+                        .padding(.leading, 4)
+                    NavigationLink {
+                        ContentView(transfer: transfer)
+                    } label: {
+                        HStack {
+                            Label("录制文件", systemImage: "waveform")
+                                .foregroundStyle(Palette.text)
+                            Spacer()
+                            Text("\(transfer.files.count) 个")
+                                .foregroundStyle(Palette.text2)
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(Palette.text2)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .card()
+                    }
+
                     Text("训练记录按账号分开保存在本机。退出登录不会删除记录，再次登录同一账号后，未上传的记录会继续上传。")
                         .font(.footnote)
                         .foregroundStyle(Palette.text2)
@@ -82,7 +106,7 @@ struct SettingsView: View {
                 .padding(.horizontal, 20)
             }
             .pageBackground()
-            .navigationTitle("设置")
+            .navigationTitle("我的")
             .alert(logoutTitle, isPresented: $isConfirmingLogout) {
                 Button("取消", role: .cancel) {}
                 Button("退出登录", role: .destructive) { Task { await accounts.logout() } }

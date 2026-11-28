@@ -56,4 +56,10 @@ extension View {
     func card(radius: CGFloat = 18) -> some View {
         background(RoundedRectangle(cornerRadius: radius).fill(Palette.surface))
     }
+
+    /// 图表用的墨色卡：两种模式下都按深色取 token。UI 规范 2.2 规定浅色模式的 Volt
+    /// 只能放在墨色卡里，图表的数据色要用 Volt，所以整张卡固定成深色（同首页统计卡原型）。
+    func inkCard() -> some View {
+        card().environment(\.colorScheme, .dark)
+    }
 }

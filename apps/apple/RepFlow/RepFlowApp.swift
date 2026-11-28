@@ -44,13 +44,14 @@ struct RepFlowApp: App {
                 if let account = accounts.current {
                     TabView {
                         TodayView(userID: account.userID)
-                            .tabItem { Label("今天", systemImage: "chart.bar") }
+                            .tabItem { Label("今天", systemImage: "sun.max") }
                         HistoryView(userID: account.userID)
-                            .tabItem { Label("历史", systemImage: "list.bullet") }
-                        ContentView(transfer: transfer)
-                            .tabItem { Label("录制文件", systemImage: "waveform") }
-                        SettingsView(account: account)
-                            .tabItem { Label("设置", systemImage: "gearshape") }
+                            .tabItem { Label("训练", systemImage: "dumbbell") }
+                        TrendsView(userID: account.userID)
+                            .tabItem { Label("趋势", systemImage: "chart.line.uptrend.xyaxis") }
+                        // 录制文件页是开发采集用的，收在「我的 → 开发者选项」里
+                        SettingsView(account: account, transfer: transfer)
+                            .tabItem { Label("我的", systemImage: "person.crop.circle") }
                     }
                     // 各页的 @Query 在 init 里按 userID 建，换账号时整棵重建，避免残留上个账号的查询
                     .id(account.userID)

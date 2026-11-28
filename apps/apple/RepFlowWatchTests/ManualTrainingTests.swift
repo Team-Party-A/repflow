@@ -40,9 +40,10 @@ final class ManualTrainingTests: XCTestCase {
             XCTAssertEqual(training.phase, .rest)
         }
         XCTAssertEqual(training.current?.sets.map(\.exerciseID), ExerciseCatalog.all.map(\.id))
-        XCTAssertEqual(training.current?.sets.count, 7)
-        XCTAssertEqual(training.current?.totalReps, 7)
-        XCTAssertEqual(ManualTraining(fileURL: fileURL).current?.totalReps, 7)
+        XCTAssertEqual(training.current?.sets.count, ExerciseCatalog.all.count)
+        XCTAssertEqual(training.current?.totalReps, ExerciseCatalog.all.count)
+        XCTAssertEqual(
+            ManualTraining(fileURL: fileURL).current?.totalReps, ExerciseCatalog.all.count)
     }
 
     func testRestartRestoresCandidateThenSavedWorkoutAndKeepsHistory() throws {
