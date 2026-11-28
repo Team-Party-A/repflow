@@ -42,22 +42,32 @@ final class TodayTemplateTests: XCTestCase {
             DraftSet(exerciseID: "dumbbell_curl", reps: 6, weightGrams: 5000),
             DraftSet(exerciseID: "push_up", reps: 9, weightGrams: 0),
         ]
-        let template = TrainingTemplate(
-            userID: owner, name: "周末", targets: TemplateTarget.from(sets))
+        let template = TrainingTemplate(userID: owner, name: "周末")
         context.insert(template)
-        context.insert(TrainingTemplate(userID: other, name: "周末", targets: []))
+        template.replaceTargets(with: TemplateTarget.from(sets), in: context)
+        context.insert(TrainingTemplate(userID: other, name: "周末"))
         try context.save()
-        let mine = try context.fetch(FetchDescriptor(predicate: TrainingTemplate.owned(by: owner)))
+        let reader = ModelContext(container)
+        let query = FetchDescriptor(predicate: TrainingTemplate.owned(by: owner))
+        let mine = try reader.fetch(query)
         XCTAssertEqual(mine.map(\.templateID), [template.templateID])
-        let targets = template.orderedTargets
+        let reloaded = try XCTUnwrap(mine.first)
+        let targets = reloaded.orderedTargets
         XCTAssertEqual(targets.map(\.sets), [2, 1, 1])
         let actual = TemplateTarget.prefill(targets)
         XCTAssertEqual(Set(actual.map(\.id)).count, 4)
         XCTAssertEqual(actual.map(\.exerciseID), sets.map(\.exerciseID))
         XCTAssertEqual(actual.map(\.weightGrams), [nil, nil, 5000, 0])
-        template.targets.first?.reps = 50
-        context.delete(template)
-        try context.save()
+        reloaded.replaceTargets(with: TemplateTarget.from([sets[2]]), in: reader)
+        try reader.save()
+        let verifier = ModelContext(container)
+        let edited = try XCTUnwrap(verifier.fetch(query).first)
+        XCTAssertEqual(edited.orderedTargets.map(\.exerciseID), ["dumbbell_curl"])
+        XCTAssertEqual(edited.orderedTargets.map(\.weightGrams), [5000])
+        XCTAssertEqual(try verifier.fetchCount(FetchDescriptor<TrainingTarget>()), 1)
+        verifier.delete(edited)
+        try verifier.save()
+        XCTAssertEqual(try verifier.fetchCount(FetchDescriptor<TrainingTarget>()), 0)
         XCTAssertEqual(actual.map(\.reps), [8, 8, 6, 9])
         XCTAssertEqual(
             try context.fetchCount(FetchDescriptor(predicate: TrainingTemplate.owned(by: other))), 1

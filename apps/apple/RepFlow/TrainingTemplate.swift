@@ -44,12 +44,20 @@ final class TrainingTemplate {
     @Relationship(deleteRule: .cascade, inverse: \TrainingTarget.template)
     var targets: [TrainingTarget]
 
-    init(userID: UUID, name: String, targets: [TemplateTarget]) {
+    init(userID: UUID, name: String) {
         templateID = UUID()
         self.userID = userID
         self.name = name
-        self.targets = targets.enumerated().map {
-            TrainingTarget(position: $0.offset, target: $0.element)
+        targets = []
+    }
+
+    func replaceTargets(with values: [TemplateTarget], in context: ModelContext) {
+        for previous in targets { context.delete(previous) }
+        for (position, value) in values.enumerated() {
+            let target = TrainingTarget(position: position, target: value)
+            context.insert(target)
+            // iOS 17.2 需要在两个对象都插入后建立关系，才能持久化动作所属的模板。
+            target.template = self
         }
     }
 

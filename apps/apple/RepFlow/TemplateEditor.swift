@@ -75,20 +75,19 @@ struct TemplateEditor: View {
             self.error = error.message
             return
         }
+        let template: TrainingTemplate
         if let original {
             guard original.userID == userID else {
                 error = "模板所属账号已变化"
                 return
             }
-            original.name = trimmed
-            let previous = original.targets
-            original.targets = targets.enumerated().map {
-                TrainingTarget(position: $0.offset, target: $0.element)
-            }
-            for target in previous { context.delete(target) }
+            template = original
+            template.name = trimmed
         } else {
-            context.insert(TrainingTemplate(userID: userID, name: trimmed, targets: targets))
+            template = TrainingTemplate(userID: userID, name: trimmed)
+            context.insert(template)
         }
+        template.replaceTargets(with: targets, in: context)
         do {
             try context.save()
             dismiss()
