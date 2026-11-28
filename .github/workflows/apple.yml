@@ -66,6 +66,14 @@ jobs:
       - name: Package the simulator App for PR 161 acceptance
         if: github.event_name == 'pull_request' && github.event.pull_request.number == 161 && github.event.pull_request.head.repo.full_name == github.repository
         run: |
+          # 模拟器通过链接时的 App 标识访问自己的钥匙串。无签名的测试宿主仅用于 XCTest。
+          entitlements="$RUNNER_TEMP/repflow-161-simulator.entitlements"
+          /usr/libexec/PlistBuddy -c 'Add :application-identifier string SIM161TEST.$(PRODUCT_BUNDLE_IDENTIFIER)' "$entitlements"
+          xcodebuild build -project RepFlow.xcodeproj -scheme RepFlow \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/repflow-derived-data" \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- \
+            "CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]=$entitlements"
           products="$RUNNER_TEMP/repflow-derived-data/Build/Products/Debug-iphonesimulator"
           info="$products/RepFlow.app/Info.plist"
           python3 - "$info" <<'PYTHON'
@@ -77,6 +85,12 @@ jobs:
           if info["CFBundleSupportedPlatforms"] != ["iPhoneSimulator"] or info.get("RepFlowAPIBaseURL"):
               sys.exit("Expected a simulator App with an unconfigured API address")
           PYTHON
+          # 检查模拟器使用的 Mach-O entitlement 段，避免上传只能打开登录页的包。
+          executable="$products/RepFlow.app/RepFlow"
+          xcrun otool -arch arm64 -l "$executable" > "$RUNNER_TEMP/repflow-load-commands.txt"
+          grep -Fq 'sectname __entitlements' "$RUNNER_TEMP/repflow-load-commands.txt"
+          /usr/bin/strings -arch arm64 "$executable" > "$RUNNER_TEMP/repflow-sim-strings.txt"
+          grep -Fq 'SIM161TEST.io.github.teampartya.repflow' "$RUNNER_TEMP/repflow-sim-strings.txt"
           tar -czf "$RUNNER_TEMP/repflow-simulator.tar.gz" -C "$products" RepFlow.app
       - name: Retain the simulator App for one day
         if: github.event_name == 'pull_request' && github.event.pull_request.number == 161 && github.event.pull_request.head.repo.full_name == github.repository
