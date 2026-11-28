@@ -6,6 +6,7 @@ struct RepFlowApp: App {
     // 后台文件投递可能不创建窗口，连接随 App 初始化，不能等视图出现。
     private let transfer = RecordingTransfer.shared
     private let container: ModelContainer
+    @State private var selectedTab = 0
     @StateObject private var accounts: AccountStore
     @StateObject private var uploads: UploadQueue
     @StateObject private var inbox: WatchInbox
@@ -42,15 +43,19 @@ struct RepFlowApp: App {
         WindowGroup {
             Group {
                 if let account = accounts.current {
-                    TabView {
-                        TodayView(userID: account.userID)
+                    TabView(selection: $selectedTab) {
+                        TodayView(userID: account.userID) { selectedTab = 1 }
                             .tabItem { Label("今天", systemImage: "chart.bar") }
+                            .tag(0)
                         HistoryView(userID: account.userID)
                             .tabItem { Label("历史", systemImage: "list.bullet") }
+                            .tag(1)
                         ContentView(transfer: transfer)
                             .tabItem { Label("录制文件", systemImage: "waveform") }
+                            .tag(2)
                         SettingsView(account: account)
                             .tabItem { Label("设置", systemImage: "gearshape") }
+                            .tag(3)
                     }
                     // 各页的 @Query 在 init 里按 userID 建，换账号时整棵重建，避免残留上个账号的查询
                     .id(account.userID)

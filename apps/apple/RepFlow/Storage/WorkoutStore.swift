@@ -11,7 +11,7 @@ struct WorkoutStore {
     static func makeContainer(inMemory: Bool = false) throws -> ModelContainer {
         try ModelContainer(
             for: Workout.self, WorkoutSet.self, UploadTask.self, DeletedWorkout.self,
-            SetIDRecord.self, Account.self,
+            SetIDRecord.self, Account.self, TrainingTemplate.self, TrainingTarget.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory))
     }
 

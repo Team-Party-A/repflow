@@ -18,6 +18,11 @@ struct ManualWorkoutView: View {
     @State private var isConfirmingDiscard = false
     @State private var saveError: String?
 
+    init(userID: UUID, initialSets: [DraftSet] = []) {
+        self.userID = userID
+        _sets = State(initialValue: initialSets)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {

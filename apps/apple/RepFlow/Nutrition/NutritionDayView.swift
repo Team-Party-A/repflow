@@ -41,7 +41,7 @@ struct NutritionDayView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("饮食记录").font(.headline)
+                Text(Calendar.current.isDateInToday(selectedDate) ? "今日摄入" : "当日摄入").font(.headline)
                 Spacer()
                 DatePicker("查看日期", selection: $selectedDate, displayedComponents: .date)
                     .labelsHidden().accessibilityLabel("查看饮食记录日期")
